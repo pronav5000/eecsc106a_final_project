@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
             'process_pointcloud = perception.process_pointcloud:main',
             'interactive_plane = perception.interactive_plane:main',
+            'cup_publisher = perception.cup_publisher:main'
         ],
     },
 )
