@@ -1,6 +1,7 @@
 from setuptools import find_packages, setup
+from glob import glob
 
-package_name = 'perception'
+package_name = 'planning'
 
 setup(
     name=package_name,
@@ -10,6 +11,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (('share/' + package_name + '/launch'), glob('launch/*.launch.py'))
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -24,9 +26,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'ball_publisher = perception.ball_publisher:main',
-            'cup_publisher = perception.cup_publisher:main',
-            'new_pub = perception.new_pub:main',
+            'task_master = planning.main_project_2:main',
+            'ik = planning.ik:main',
         ],
     },
 )

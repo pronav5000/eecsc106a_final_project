@@ -16,37 +16,37 @@ def generate_launch_description():
     )
     camera_device = LaunchConfiguration('camera_device')
 
-    usb_cam_node = Node(
-        package='usb_cam',
-        executable='usb_cam_node',
-        name='logitech_camera',
-        output='screen',
-        parameters=[{
-            'video_device': camera_device,
-            'image_width': 640,
-            'image_height': 480,
-            'pixel_format': 'mjpeg',
-            'camera_frame_id': 'camera_link'
-        }]
-    )
+    # usb_cam_node = Node(
+    #     package='usb_cam',
+    #     executable='usb_cam_node',
+    #     name='logitech_camera',
+    #     output='screen',
+    #     parameters=[{
+    #         'video_device': camera_device,
+    #         'image_width': 640,
+    #         'image_height': 480,
+    #         'pixel_format': 'mjpeg',
+    #         'camera_frame_id': 'camera_link'
+    #     }]
+    # )
 
-    static_tf_camera = Node(
-        package='your_pkg',
-        executable='camera_to_base_tf.py',
-        name='camera_to_base_tf',
-        output='screen'
-    )
+    # static_tf_camera = Node(
+    #     package='your_pkg',
+    #     executable='camera_to_base_tf.py',
+    #     name='camera_to_base_tf',
+    #     output='screen'
+    # )
 
     ball_node = Node(
-        package='your_pkg',
-        executable='ball_publisher.py',
+        package='perception',
+        executable='ball_publisher',
         name='ball_publisher',
         output='screen'
     )
 
     cup_node = Node(
-        package='your_pkg',
-        executable='cup_publisher.py',
+        package='perception',
+        executable='cup_publisher',
         name='cup_publisher',
         output='screen'
     )
@@ -57,6 +57,30 @@ def generate_launch_description():
         name='ik',
         output='screen'
     )
+
+    taskmaster_node = Node(
+        package='planning',
+        executable='task_master',
+        name='task_master',
+        output='screen'
+    )
+
+    # ArUco recognition
+    aruco_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory('ros2_aruco'),
+                'launch',
+                'aruco_recognition.launch.py'
+            )
+        )
+    )
+
+    ar_marker_launch_arg = DeclareLaunchArgument(
+        'ar_marker',
+        default_value='ar_marker_7'
+    )
+    ar_marker = LaunchConfiguration('ar_marker')
 
     ur_type = LaunchConfiguration("ur_type", default="ur7e")
     launch_rviz = LaunchConfiguration("launch_rviz", default="true")
@@ -83,11 +107,13 @@ def generate_launch_description():
 
     return LaunchDescription([
         camera_device_arg,
-        usb_cam_node,
-        static_tf_camera,
+        # usb_cam_node,
+        # static_tf_camera,
         ball_node,
         cup_node,
+        aruco_launch,
         moveit_launch,
         ik_node,
+        taskmaster_node,
         shutdown_on_exit
     ])
