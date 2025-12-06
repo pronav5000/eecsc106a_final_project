@@ -26,6 +26,7 @@ setup(
         'console_scripts': [
             'ball_publisher = perception.ball_publisher:main',
             'cup_publisher = perception.cup_publisher:main',
+            'new_pub = perception.new_pub:main',
         ],
     },
 )
