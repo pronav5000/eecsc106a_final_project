@@ -30,13 +30,39 @@ def generate_launch_description():
     #     }]
     # )
 
-    # static_tf_camera = Node(
-    #     package='your_pkg',
-    #     executable='camera_to_base_tf.py',
-    #     name='camera_to_base_tf',
-    #     output='screen'
-    # )
+    # ArUco recognition
+    aruco_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory('ros2_aruco'),
+                'launch',
+                'aruco_recognition.launch.py'
+            )
+        )
+    )
 
+    static_base_world = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_base_world',
+        arguments=['0', '0', '0', '0', '0', '0', '1', 'base_link', 'world'],
+        output='screen'
+    )
+
+    ar_marker_launch_arg = DeclareLaunchArgument(
+        'ar_marker',
+        default_value='ar_marker_7'
+    )
+    ar_marker = LaunchConfiguration('ar_marker')
+
+    planning_tf_node = Node(
+        package='planning',
+        executable='tf',
+        name='tf_node',
+        parameters=[{'ar_marker': ar_marker,}],
+        output='screen'
+    )
+        
     ball_node = Node(
         package='perception',
         executable='ball_publisher',
@@ -58,29 +84,20 @@ def generate_launch_description():
         output='screen'
     )
 
+
+    # taskmaster_node = Node(
+    #     package='planning',
+    #     executable='task_master',
+    #     name='task_master',
+    #     output='screen'
+    # )
+
     taskmaster_node = Node(
         package='planning',
-        executable='task_master',
-        name='task_master',
+        executable='main',
+        name='main',
         output='screen'
     )
-
-    # ArUco recognition
-    aruco_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory('ros2_aruco'),
-                'launch',
-                'aruco_recognition.launch.py'
-            )
-        )
-    )
-
-    ar_marker_launch_arg = DeclareLaunchArgument(
-        'ar_marker',
-        default_value='ar_marker_7'
-    )
-    ar_marker = LaunchConfiguration('ar_marker')
 
     ur_type = LaunchConfiguration("ur_type", default="ur7e")
     launch_rviz = LaunchConfiguration("launch_rviz", default="true")
@@ -106,9 +123,12 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        ar_marker_launch_arg,
         camera_device_arg,
         # usb_cam_node,
         # static_tf_camera,
+        planning_tf_node,
+        static_base_world,
         ball_node,
         cup_node,
         aruco_launch,

@@ -39,7 +39,7 @@ class UR7e_CubeGrasp(Node):
             JointState, '/joint_states', self.joint_state_callback, 1
         )
         self.cup_sub = self.create_subscription(
-            PoseStamped, '/cup_pose', self.cup_callback, 1
+            PointStamped, '/cup_point', self.cup_callback, 1
         )
 
         # Action client for joint trajectories
@@ -94,7 +94,7 @@ class UR7e_CubeGrasp(Node):
 
         self.cube_pose = cube_pose
 
-    def cup_callback(self, cup_pose: PoseStamped):
+    def cup_callback(self, cup_pose: PointStamped):
         print('entered callback')
         if self.cup_pose is not None:
             print('self.cup_pose is not None')
@@ -103,6 +103,10 @@ class UR7e_CubeGrasp(Node):
         if self.joint_state is None:
             print('self.joint_state is not None')
             self.get_logger().info("No joint state yet, cannot proceed")
+            return
+
+        if self.cube_pose is None:
+            self.get_logger().info("No ball detected, cannot proceed")
             return
 
         self.cup_pose = cup_pose
@@ -116,7 +120,7 @@ class UR7e_CubeGrasp(Node):
         # -----------------------------------------------------------
         # Build job queue exactly like your original code
         # -----------------------------------------------------------
-
+        self.get_logger().info(f"Job queue length after building: {len(self.job_queue)}")
         # 1) Move to Pre-Grasp Position (gripper above the cube)
         x = self.cube_pose.point.x
         y = self.cube_pose.point.y - 0.035
@@ -220,11 +224,13 @@ class UR7e_CubeGrasp(Node):
         joint_waypoints = []
         for p in bezier_positions:
             x, y, z = float(p[0]), float(p[1]), float(p[2])
+            print('pre ik bezier', x, y, z)
             js = self.ik_planner.compute_ik(self.joint_state, x, y, z)
             if js is None:
                 self.get_logger().warn("IK failed for a Bezier waypoint, skipping it")
                 continue
             joint_waypoints.append(js)
+        print('post ik bezier', joint_waypoints)
 
         if len(joint_waypoints) < 2:
             self.get_logger().error(
