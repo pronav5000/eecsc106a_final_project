@@ -6,7 +6,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from control_msgs.action import FollowJointTrajectory
-from geometry_msgs.msg import PointStamped, Pose
+from geometry_msgs.msg import PointStamped, PoseStamped, Pose
 from moveit_msgs.msg import RobotTrajectory
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from sensor_msgs.msg import JointState
@@ -39,7 +39,7 @@ class UR7e_CubeGrasp(Node):
             JointState, '/joint_states', self.joint_state_callback, 1
         )
         self.cup_sub = self.create_subscription(
-            PointStamped, '/cup_pose', self.cup_callback, 1
+            PoseStamped, '/cup_pose', self.cup_callback, 1
         )
 
         # Action client for joint trajectories
@@ -94,7 +94,7 @@ class UR7e_CubeGrasp(Node):
 
         self.cube_pose = cube_pose
 
-    def cup_callback(self, cup_pose: PointStamped):
+    def cup_callback(self, cup_pose: PoseStamped):
         print('entered callback')
         if self.cup_pose is not None:
             print('self.cup_pose is not None')
