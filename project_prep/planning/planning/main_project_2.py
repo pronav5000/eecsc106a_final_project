@@ -194,9 +194,9 @@ class UR7e_CubeGrasp(Node):
             
         # 5) Throw preparation: add throw job (single entry)
         # (x, y, z here are unused in _throw_ball but we keep them to match your structure)
-        x = self.cup_pose.point.x + 0.4
+        x = self.cup_pose.point.x + 0.2
         y = self.cup_pose.point.y
-        z = self.cup_pose.point.z + 0.18
+        z = self.cup_pose.point.z 
         self.job_queue.append(['throw_ball', x, y, z])
         print('Append 5:', self.job_queue)
 
