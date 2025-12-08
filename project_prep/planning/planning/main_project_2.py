@@ -18,6 +18,7 @@ import time
 
 from builtin_interfaces.msg import Duration
 from planning.ik import IKPlanner
+from planning.jacobian import JacobianPlanner
 
 
 def bezier_curve(p0, p1, p2, p3, t):
@@ -59,6 +60,7 @@ class UR7e_CubeGrasp(Node):
         self.joint_state = None
 
         self.ik_planner = IKPlanner()
+        self.jac_planner = JacobianPlanner()
 
         # Single unified queue (keeps your structure)
         # Entries: JointState or 'toggle_grip' or ['throw_ball', x, y, z]

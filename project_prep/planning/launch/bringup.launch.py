@@ -84,6 +84,12 @@ def generate_launch_description():
         output='screen'
     )
 
+    jac_node = Node(
+        package='planning',
+        executable='jac',
+        name='jac',
+        output='screen'
+    )
 
     taskmaster_node = Node(
         package='planning',
@@ -134,6 +140,7 @@ def generate_launch_description():
         aruco_launch,
         moveit_launch,
         ik_node,
+        jac_node,
         taskmaster_node,
         shutdown_on_exit
     ])
