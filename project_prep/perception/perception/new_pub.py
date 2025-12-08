@@ -58,8 +58,8 @@ class Ball3DDetector(Node):
         super().__init__('ball_3d_detector')
 
         # Parameters
-        self.declare_parameter('image_topic', '/camera/image_raw')
-        self.declare_parameter('camera_info_topic', '/camera/camera_info')
+        self.declare_parameter('image_topic', '/camera1/image_raw')
+        self.declare_parameter('camera_info_topic', '/camera1/camera_info')
         self.declare_parameter('ball_diameter', 0.07)  # meters
         self.declare_parameter('hsv_min', [55, 40, 0])
         self.declare_parameter('hsv_max', [150, 255, 255])

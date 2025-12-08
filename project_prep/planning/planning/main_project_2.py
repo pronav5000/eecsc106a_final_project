@@ -6,7 +6,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from control_msgs.action import FollowJointTrajectory
-from geometry_msgs.msg import PointStamped, Pose
+from geometry_msgs.msg import PointStamped, PoseStamped, Pose
 from moveit_msgs.msg import RobotTrajectory
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from sensor_msgs.msg import JointState
@@ -33,7 +33,7 @@ class UR7e_CubeGrasp(Node):
 
         # Subscribers
         self.ball_pub = self.create_subscription(
-            PointStamped, '/ball_point', self.cube_callback, 1
+            PointStamped, '/ball_pos', self.cube_callback, 1
         )
         self.joint_state_sub = self.create_subscription(
             JointState, '/joint_states', self.joint_state_callback, 1
@@ -85,24 +85,34 @@ class UR7e_CubeGrasp(Node):
         self.joint_state = msg
 
     def cube_callback(self, cube_pose: PointStamped):
-        if self.cube_pose is not None:
-            return
+        # if self.cube_pose is None:
+        #     return
 
-        if self.joint_state is None:
-            self.get_logger().info("No joint state yet, cannot proceed")
-            return
+        # if self.joint_state is None:
+        #     self.get_logger().info("No joint state yet, cannot proceed")
+        #     return
 
         self.cube_pose = cube_pose
 
     def cup_callback(self, cup_pose: PointStamped):
+        print('entered callback')
         if self.cup_pose is not None:
+            print('self.cup_pose is not None')
             return
 
         if self.joint_state is None:
+            print('self.joint_state is not None')
             self.get_logger().info("No joint state yet, cannot proceed")
             return
 
+        if self.cube_pose is None:
+            self.get_logger().info("No ball detected, cannot proceed")
+            return
+
         self.cup_pose = cup_pose
+
+        print("Cup pose: ", self.cup_pose) # Debugging
+        print("Cube pose: ", self.cube_pose) # Debugging
 
         # Precompute throw poses (release + follow‑through)
         self.pose_release, self.pose_end = self._compute_throw_poses(self.cup_pose)
@@ -110,20 +120,22 @@ class UR7e_CubeGrasp(Node):
         # -----------------------------------------------------------
         # Build job queue exactly like your original code
         # -----------------------------------------------------------
-
+        self.get_logger().info(f"Job queue length after building: {len(self.job_queue)}")
         # 1) Move to Pre-Grasp Position (gripper above the cube)
         x = self.cube_pose.point.x
         y = self.cube_pose.point.y - 0.035
         z = self.cube_pose.point.z + 0.185
         state_1 = self.ik_planner.compute_ik(self.joint_state, x, y, z)
         self.job_queue.append(state_1)
-
+        print('Append 1:', self.job_queue)
+        
         # 2) Move to Grasp Position (lower the gripper to the cube)
         x = self.cube_pose.point.x
         y = self.cube_pose.point.y - 0.027
         z = self.cube_pose.point.z + 0.16
         state_2 = self.ik_planner.compute_ik(self.joint_state, x, y, z)
         self.job_queue.append(state_2)
+        print('Append 2:', self.job_queue)
 
         # 3) Close the gripper.
         self.job_queue.append('toggle_grip')
@@ -134,6 +146,7 @@ class UR7e_CubeGrasp(Node):
         z = self.cube_pose.point.z + 0.185
         state_3 = self.ik_planner.compute_ik(self.joint_state, x, y, z)
         self.job_queue.append(state_3)
+        print('Append 4:', self.job_queue)
 
         # 5) Throw preparation: add throw job (single entry)
         # (x, y, z here are unused in _throw_ball but we keep them to match your structure)
@@ -141,6 +154,7 @@ class UR7e_CubeGrasp(Node):
         y = self.cup_pose.point.y
         z = self.cup_pose.point.z + 0.18
         self.job_queue.append(['throw_ball', x, y, z])
+        print('Append 5:', self.job_queue)
 
         # NOTE: do NOT append a separate 'toggle_grip' here — the throw job
         # will schedule the mid-trajectory release itself.
@@ -210,11 +224,13 @@ class UR7e_CubeGrasp(Node):
         joint_waypoints = []
         for p in bezier_positions:
             x, y, z = float(p[0]), float(p[1]), float(p[2])
+            print('pre ik bezier', x, y, z)
             js = self.ik_planner.compute_ik(self.joint_state, x, y, z)
             if js is None:
                 self.get_logger().warn("IK failed for a Bezier waypoint, skipping it")
                 continue
             joint_waypoints.append(js)
+        print('post ik bezier', joint_waypoints)
 
         if len(joint_waypoints) < 2:
             self.get_logger().error(
