@@ -91,7 +91,7 @@ class UR7e_CubeGrasp(Node):
         self.get_logger().info(f"y: {self.cube_pose.point.y}")
         self.get_logger().info(f"z: {self.cube_pose.point.z}")
 
-        joint_sol_1 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x-0.02, self.cube_pose.point.y - 0.035, self.cube_pose.point.z + 0.185)
+        joint_sol_1 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x-0.1, self.cube_pose.point.y - 0.035, self.cube_pose.point.z + 0.185)
         self.job_queue.append(joint_sol_1)
         if joint_sol_1 is not None:
             self.get_logger().info("Joint solution 1 computed succesfully.")

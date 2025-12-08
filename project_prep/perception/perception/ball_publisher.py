@@ -59,7 +59,7 @@ class BallPosePublisher(Node):
             # pose.pose.orientation = tf_msg.transform.rotation
 
             self.pub.publish(p)
-            self.get_logger().info(f"Ball in camera frame: X={p.point.x:.2f} Y={p.point.y:.2f} Z={p.point.z:.2f}")
+            #self.get_logger().info(f"Ball in camera frame: X={p.point.x:.2f} Y={p.point.y:.2f} Z={p.point.z:.2f}")
 
 
         except TransformException as e:
