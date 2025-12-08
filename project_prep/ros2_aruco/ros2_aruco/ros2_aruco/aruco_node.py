@@ -136,7 +136,7 @@ class ArucoNode(rclpy.node.Node):
         self.get_logger().info(f"Marker size: {self.marker_size}")
         
         self.marker_size_map = {1: 0.15, 2: 0.15, 3: 0.15, 4: 0.15, 5: 0.15, 11: 0.15, 
-                                6: 0.15, 7: 0.15, 8: 0.15, 9: 0.15, 10: 0.15, 20: 0.10, 21: 0.05}
+                                6: 0.15, 7: 0.15, 8: 0.15, 9: 0.15, 10: 0.15, 20: 0.10, 21: 0.035}
         self.get_logger().info(f"Marker size map for marker ids is: {self.marker_size_map}")
 
         dictionary_id_name = (
@@ -247,7 +247,7 @@ class ArucoNode(rclpy.node.Node):
                 elif marker_size == 0.10:
                     cup_corners.append(corners[i])
                     cup_markers.append(marker_id)                    
-                elif marker_size == 0.05:
+                elif marker_size == 0.035:
                     ball_corners.append(corners[i])
                     ball_markers.append(marker_id)
                 goal_corners.append(corners[i])
@@ -262,8 +262,8 @@ class ArucoNode(rclpy.node.Node):
                     ur7e_rvecs, ur7e_tvecs = cv2.aruco.estimatePoseSingleMarkers(
                         ur7e_corners, ur7e_markers, self.intrinsic_mat, self.distortion
                     )
-                #self.get_logger().info(f"info is {goal_markers}")
-                #self.get_logger().info(f"info is {ur7e_rvecs}, {ur7e_tvecs}")
+                # self.get_logger().info(f"info is {goal_markers}")
+                # self.get_logger().info(f"info is {ur7e_rvecs}, {ur7e_tvecs}")
                 rvecs.extend(ur7e_rvecs)
                 tvecs.extend(ur7e_tvecs)
                 final_marker_ids.extend(ur7e_markers)
@@ -272,7 +272,7 @@ class ArucoNode(rclpy.node.Node):
                 cup_rvecs, cup_tvecs = [], []
                 if cv2.__version__ > "4.0.0":
                     cup_rvecs, cup_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
-                        cup_corners, 0.05, self.intrinsic_mat, self.distortion
+                        cup_corners, 0.10, self.intrinsic_mat, self.distortion
                     )
                 else:
                     cup_rvecs, cup_tvecs = cv2.aruco.estimatePoseSingleMarkers(
@@ -287,7 +287,7 @@ class ArucoNode(rclpy.node.Node):
                 ball_rvecs, ball_tvecs = [], []
                 if cv2.__version__ > "4.0.0":
                     ball_rvecs, ball_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
-                        ball_corners, 0.05, self.intrinsic_mat, self.distortion
+                        ball_corners, 0.035, self.intrinsic_mat, self.distortion
                     )
                 else:
                     ball_rvecs, ball_tvecs = cv2.aruco.estimatePoseSingleMarkers(

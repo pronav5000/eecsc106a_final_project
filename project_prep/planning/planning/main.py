@@ -91,7 +91,9 @@ class UR7e_CubeGrasp(Node):
         self.get_logger().info(f"y: {self.cube_pose.point.y}")
         self.get_logger().info(f"z: {self.cube_pose.point.z}")
 
-        joint_sol_1 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x-0.1, self.cube_pose.point.y - 0.035, self.cube_pose.point.z + 0.185)
+        offset_x, offset_y, offset_z = 0.0, -0.035, 0.185
+
+        joint_sol_1 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z)
         self.job_queue.append(joint_sol_1)
         if joint_sol_1 is not None:
             self.get_logger().info("Joint solution 1 computed succesfully.")
@@ -101,7 +103,7 @@ class UR7e_CubeGrasp(Node):
         Note that this will again be defined relative to the cube pose. 
         DO NOT CHANGE z offset lower than +0.16. 
         '''
-        joint_sol_2 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x-0.02, self.cube_pose.point.y - 0.035, self.cube_pose.point.z + 0.16)
+        joint_sol_2 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y -0.01, self.cube_pose.point.z + offset_z -0.02)
         self.job_queue.append(joint_sol_2)
         if joint_sol_2 is not None:
             self.get_logger().info("Joint solution 2 computed succesfully.")
@@ -110,7 +112,7 @@ class UR7e_CubeGrasp(Node):
         self.job_queue.append('toggle_grip')
         
         # 4) Move back to Pre-Grasp Position
-        joint_sol_3 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x-0.02, self.cube_pose.point.y - 0.035, self.cube_pose.point.z + 0.185)
+        joint_sol_3 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z + 0.1)
         self.job_queue.append(joint_sol_3)
         if joint_sol_3 is not None:
             self.get_logger().info("Joint solution 3 computed succesfully.")
@@ -121,7 +123,7 @@ class UR7e_CubeGrasp(Node):
         We want the release position to be 0.4m on the other side of the aruco tag relative to initial cube pose.
         Which offset will you change to achieve this and in what direction?
         '''        
-        joint_sol_4 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + 0.38, self.cube_pose.point.y - 0.035, self.cube_pose.point.z + 0.16)
+        joint_sol_4 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z)
         self.job_queue.append(joint_sol_4)
         if joint_sol_4 is not None:
             self.get_logger().info("Joint solution 4 computed succesfully.")
