@@ -144,22 +144,80 @@ class UR7e_CubeGrasp(Node):
 
         self.execute_jobs()
     
-    def throw_ball(self):
-        new_positions = list(self.joint_state.position)
-        self.get_logger().info(f"new_positions:  {new_positions}")
+    # [OLD] def throw_ball(self):
+    #     new_positions = list(self.joint_state.position)
+    #     self.get_logger().info(f"new_positions:  {new_positions}")
 
-        new_positions[4] = new_positions[4] + np.pi/2
+    #     new_positions[4] = new_positions[4] + np.pi/2
+    #     traj = JointTrajectory()
+    #     traj.joint_names = self.joint_names
+    #     point = JointTrajectoryPoint()
+    #     point.positions = new_positions
+    #     point.velocities = [0.0]*6
+    #     point.velocities[4] = 1.0
+    #     point.time_from_start.sec = 5 # set to 5 acc to pdf
+
+    #     self.get_logger().info(f"new_positions after velocities set to 1.0: {new_positions}")
+    #     traj.points.append(point)
+    #     self.joint_pub.publish(traj)
+
+    def throw_ball(self, joint_index=3, velocity=1.0, travel_angle=np.pi/2):
+    
+    # Move a single joint at a specified velocity while keeping all other joints fixed.
+    # joint_index: index of joint to move (default = wrist_2 or wrist_3 depending on your robot)
+    # velocity: desired joint velocity in rad/s
+    # travel_angle: total angle to move through
+
+
+        if self.joint_state is None:
+            self.get_logger().error("No joint state available for throw command")
+            return
+
+        # ---- 1) Read current joint positions ----
+        start_pos = list(self.joint_state.position)
+        target_pos = start_pos.copy()
+
+        # Only the desired joint moves
+        target_pos[joint_index] += travel_angle
+
+        # ---- 2) Compute duration needed for that velocity ----
+        duration = abs(travel_angle / velocity)
+
         traj = JointTrajectory()
         traj.joint_names = self.joint_names
-        point = JointTrajectoryPoint()
-        point.positions = new_positions
-        point.velocities = [0.0]*6
-        point.velocities[4] = 1.0
-        point.time_from_start.sec = 5 # set to 5 acc to pdf
 
-        self.get_logger().info(f"new_positions after velocities set to 1.0: {new_positions}")
+        point = JointTrajectoryPoint()
+
+        # Final positions
+        point.positions = target_pos
+
+        # All joints zero velocity except the throwing joint
+        point.velocities = [0.0] * len(self.joint_names)
+        point.velocities[joint_index] = velocity
+
+        # Required time_from_start so the controller actually executes it
+        point.time_from_start.sec = int(duration)
+        point.time_from_start.nanosec = int((duration - int(duration)) * 1e9)
+
         traj.points.append(point)
+
+        self.get_logger().info(
+            f"Throwing with joint {joint_index}, vel={velocity}, duration={duration:.2f}s"
+        )
         self.joint_pub.publish(traj)
+        self.get_logger().info("Velocity Joint Trajectory published.")
+        # Ball to velocity has occured
+
+        # opening gripper after waiting a time period of duration
+
+
+        # self._toggle_gripper()
+        # self.get_logger().info("Gripper toggled - ball thrown")
+
+
+
+        
+
 
     def execute_jobs(self):
         if not self.job_queue:
@@ -189,6 +247,7 @@ class UR7e_CubeGrasp(Node):
         elif next_job == 'throw_ball':
             self.get_logger().info("Throwing ball")
             self.throw_ball()
+            
 
         else:
             self.get_logger().error("Unknown job type.")
