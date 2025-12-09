@@ -145,15 +145,19 @@ class UR7e_CubeGrasp(Node):
         self.execute_jobs()
     
     def throw_ball(self):
-        new_positions = self.joint_state.position
-        new_positions[2] = new_positions[2] + np.pi/2
+        new_positions = list(self.joint_state.position)
+        self.get_logger().info(f"new_positions:  {new_positions}")
+
+        new_positions[4] = new_positions[4] + np.pi/2
         traj = JointTrajectory()
         traj.joint_names = self.joint_names
         point = JointTrajectoryPoint()
         point.positions = new_positions
         point.velocities = [0.0]*6
-        point.velocities[2] = 1.0
+        point.velocities[4] = 1.0
         point.time_from_start.sec = 5 # set to 5 acc to pdf
+
+        self.get_logger().info(f"new_positions after velocities set to 1.0: {new_positions}")
         traj.points.append(point)
         self.joint_pub.publish(traj)
 

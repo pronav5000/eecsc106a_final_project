@@ -262,8 +262,8 @@ class ArucoNode(rclpy.node.Node):
                     ur7e_rvecs, ur7e_tvecs = cv2.aruco.estimatePoseSingleMarkers(
                         ur7e_corners, ur7e_markers, self.intrinsic_mat, self.distortion
                     )
-                self.get_logger().info(f"info is {goal_markers}")
-                self.get_logger().info(f"info is {ur7e_rvecs}, {ur7e_tvecs}")
+                #self.get_logger().info(f"info is {goal_markers}")
+                #self.get_logger().info(f"info is {ur7e_rvecs}, {ur7e_tvecs}")
                 rvecs.extend(ur7e_rvecs)
                 tvecs.extend(ur7e_tvecs)
                 final_marker_ids.extend(ur7e_markers)
