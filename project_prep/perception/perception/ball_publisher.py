@@ -14,7 +14,7 @@ class BallPosePublisher(Node):
         # not sure if i need these lines
 
         self.declare_parameter("marker_id", 'ar_marker_21')
-        self.declare_parameter("marker_id_2", 'ar_marker_9')
+        self.declare_parameter("marker_id_2", 'ar_marker_7')
         #self.declare_parameter("target_frame", "base_link")
 
         self.marker_id = self.get_parameter("marker_id").get_parameter_value().string_value

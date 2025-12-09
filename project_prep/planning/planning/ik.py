@@ -121,8 +121,6 @@ class IKPlanner(Node):
         self.get_logger().info('Motion plan computed successfully.')
 
         trajectory = result.motion_plan_response.trajectory
-        for point, vel in zip(trajectory.points, target_joint_state.velocity):
-            point.velocities = [vel] * len(point.positions)
 
         return trajectory
 
