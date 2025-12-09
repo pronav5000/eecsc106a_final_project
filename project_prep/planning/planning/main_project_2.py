@@ -100,6 +100,10 @@ class UR7e_CubeGrasp(Node):
         self.cube_pose.point = transformed_position
         self.get_logger().info(f"Transformed ball position in base frame: X={transformed_position.x} Y={transformed_position.y} Z={transformed_position.z}")
 
+        if self.cup_pose is None:
+            self.get_logger().info("No cu[] position HELP")
+            return
+
             # Use the transformed position to compute IK
         # -----------------------------------------------------------
         # TODO: In the following section you will add joint angles to the job queue. 
@@ -132,7 +136,7 @@ class UR7e_CubeGrasp(Node):
         Note that this will again be defined relative to the cube pose. 
         DO NOT CHANGE z offset lower than +0.16. 
         '''
-        joint_sol_2 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y -0.01, self.cube_pose.point.z + offset_z -0.02)
+        joint_sol_2 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y + 0.02, self.cube_pose.point.z + offset_z -0.02)
         self.job_queue.append(joint_sol_2)
         if joint_sol_2 is not None:
             self.get_logger().info("Joint solution 2 computed succesfully.")
@@ -164,12 +168,15 @@ class UR7e_CubeGrasp(Node):
         We want the release position to be 0.4m on the other side of the aruco tag relative to initial cube pose.
         Which offset will you change to achieve this and in what direction?
         '''        
-        joint_sol_5 = self.ik_planner.compute_ik(self.joint_state, 0.0, self.cup_pose.point.y + offset_y, 0.5)
-        self.job_queue.append(joint_sol_5)
-        if joint_sol_5 is not None:
-            self.get_logger().info("Joint solution 4 computed succesfully.")
+        # joint_sol_5 = self.ik_planner.compute_ik(self.joint_state, 0.0, self.cup_pose.point.y, 0.5)
+        # self.job_queue.append(joint_sol_5)
+        # if joint_sol_5 is not None:
+        #     self.get_logger().info("Joint solution 4 computed succesfully.")
+
+        self.job_queue.append('align_base')
         
         self.job_queue.append('rotate_gripper')
+        
 
         # # 6) Release the gripper
         # self.job_queue.append('toggle_grip')
@@ -180,7 +187,35 @@ class UR7e_CubeGrasp(Node):
         self.job_queue.append('throw_ball')
 
         self.execute_jobs()
+    def align_base(self):
+        if self.joint_state is None:
+            self.get_logger().error("No joint state available! Can't throw.")
+            return
+
+        # ---------------------------------------------
+        # 2) Call IK to get joint positions for the pose
+        # ---------------------------------------------
+
+        transform = self.tf_buffer.lookup_transform('wrist_3_link', self.cup_pose.header.frame_id, rclpy.time.Time())
+        transformed_point = tf2_geometry_msgs.do_transform_point(self.cup_pose, transform)
+
+        # The transformed point is now in the base_link frame
+        transformed_position = transformed_point.point
+
+        base_joint_angle = np.arctan2(transformed_position.y, transformed_position.x)
+        target = JointState()
+        target.header = self.joint_state.header
+        target.name = list(self.joint_state.name)
+        target.position = list(self.joint_state.position)
+        target.position[5] = target.position[5] - base_joint_angle
+        target.velocity = [0.0]*6
+        target.velocity[5] = 1.0
+
+        traj = self.ik_planner.plan_to_joints(target)
+        self._execute_joint_trajectory(traj.joint_trajectory)
+      
     
+
     
     def throw_ball(self,
                throw_angle=np.pi/2,
@@ -200,7 +235,7 @@ class UR7e_CubeGrasp(Node):
         target.header = self.joint_state.header
         target.name = list(self.joint_state.name)
         target.position = list(self.joint_state.position)
-        target.position[3] = target.position[3] + np.pi/2
+        target.position[3] = target.position[3] - np.pi/2
         target.velocity = [0.0]*6
         target.velocity[3] = 1.0
 
@@ -278,6 +313,9 @@ class UR7e_CubeGrasp(Node):
         elif next_job == 'restore_state':
             self.get_logger().info("Restoring to tuck")
             self.restore_state()
+        elif next_job == 'align_base':
+            self.get_logger().info("Moving to base")
+            self.align_base()
             
             
 
