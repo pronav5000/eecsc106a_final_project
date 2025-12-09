@@ -127,7 +127,7 @@ class UR7e_CubeGrasp(Node):
         We want the release position to be 0.4m on the other side of the aruco tag relative to initial cube pose.
         Which offset will you change to achieve this and in what direction?
         '''        
-        joint_sol_4 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z)
+        joint_sol_4 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z + 0.5)
         self.job_queue.append(joint_sol_4)
         if joint_sol_4 is not None:
             self.get_logger().info("Joint solution 4 computed succesfully.")
@@ -161,58 +161,151 @@ class UR7e_CubeGrasp(Node):
     #     traj.points.append(point)
     #     self.joint_pub.publish(traj)
 
-    def throw_ball(self, joint_index=3, velocity=1.0, travel_angle=np.pi/2):
+    # def throw_ball(self, joint_index=3, velocity=1.0, travel_angle=np.pi/2):
     
-    # Move a single joint at a specified velocity while keeping all other joints fixed.
-    # joint_index: index of joint to move (default = wrist_2 or wrist_3 depending on your robot)
-    # velocity: desired joint velocity in rad/s
-    # travel_angle: total angle to move through
+    # # Move a single joint at a specified velocity while keeping all other joints fixed.
+    # # joint_index: index of joint to move (default = wrist_2 or wrist_3 depending on your robot)
+    # # velocity: desired joint velocity in rad/s
+    # # travel_angle: total angle to move through
 
 
+    #     if self.joint_state is None:
+    #         self.get_logger().error("No joint state available for throw command")
+    #         return
+
+    #     # ---- 1) Read current joint positions ----
+    #     start_pos = list(self.joint_state.position)
+    #     target_pos = start_pos.copy()
+
+    #     # Only the desired joint moves
+    #     target_pos[joint_index] += travel_angle
+
+    #     # ---- 2) Compute duration needed for that velocity ----
+    #     duration = abs(travel_angle / velocity)
+
+    #     traj = JointTrajectory()
+    #     traj.joint_names = self.joint_names
+
+    #     point = JointTrajectoryPoint()
+
+    #     # Final positions
+    #     point.positions = target_pos
+
+    #     # All joints zero velocity except the throwing joint
+    #     point.velocities = [0.0] * len(self.joint_names)
+    #     point.velocities[joint_index] = velocity
+
+    #     # Required time_from_start so the controller actually executes it
+    #     point.time_from_start.sec = int(duration)
+    #     point.time_from_start.nanosec = int((duration - int(duration)) * 1e9)
+
+    #     traj.points.append(point)
+
+    #     self.get_logger().info(
+    #         f"Throwing with joint {joint_index}, vel={velocity}, duration={duration:.2f}s"
+    #     )
+    #     self.joint_pub.publish(traj)
+    #     self.get_logger().info("Velocity Joint Trajectory published.")
+    #     # Ball to velocity has occured
+
+    #     # opening gripper after waiting a time period of duration
+
+
+    #     # self._toggle_gripper()
+    #     # self.get_logger().info("Gripper toggled - ball thrown")
+
+
+    def throw_ball(self,
+                throw_angle=np.pi/2,
+                throw_velocity=1.0):
+        """
+        1) Use custom IKPlanner.compute_ik() to solve for target pose.
+        2) Modify joint 4 by +throw_angle.
+        3) Execute a clean 2-point JointTrajectory.
+        """
+
+        # -----------------------------------------
+        # 1) Must have current joint state
+        # -----------------------------------------
         if self.joint_state is None:
-            self.get_logger().error("No joint state available for throw command")
+            self.get_logger().error("No joint state available! Can't throw.")
+            return
+        target_x = self.cube_pose.point.x + 0.4
+        target_y = self.cube_pose.point.y
+        target_z = self.cube_pose.point.z
+        self.get_logger().info("computed target position")
+        # -----------------------------------------
+        # 2) Compute IK using your solver
+        # -----------------------------------------
+        ik_solution = self.ik_planner.compute_ik(
+            current_joint_state=self.joint_state,
+            x=target_x,
+            y=target_y,
+            z=target_z
+        )
+
+        if ik_solution is None:
+            self.get_logger().error("IK returned no solution.")
             return
 
-        # ---- 1) Read current joint positions ----
-        start_pos = list(self.joint_state.position)
-        target_pos = start_pos.copy()
+        # Convert IK joint state into an ordered list matching your controller
+        ik_positions = [0.0] * len(self.joint_names)
 
-        # Only the desired joint moves
-        target_pos[joint_index] += travel_angle
+        for name, pos in zip(ik_solution.name, ik_solution.position):
+            if name in self.joint_names:
+                idx = self.joint_names.index(name)
+                ik_positions[idx] = pos
+            else:
+                self.get_logger().warn(f"IK returned unknown joint: {name}")
 
-        # ---- 2) Compute duration needed for that velocity ----
-        duration = abs(travel_angle / velocity)
+        # -----------------------------------------
+        # 3) Add the throwing motion on joint 4
+        # -----------------------------------------
+        throwing_joint = 4
 
+        start_throw_angle = ik_positions[throwing_joint]
+        final_throw_angle = start_throw_angle + throw_angle
+
+        final_positions = ik_positions.copy()
+        final_positions[throwing_joint] = final_throw_angle
+
+        # Duration = angle / velocity
+        duration = abs(throw_angle / throw_velocity)
+
+        # -----------------------------------------
+        # 4) Build trajectory with 2 points
+        # -----------------------------------------
         traj = JointTrajectory()
         traj.joint_names = self.joint_names
 
-        point = JointTrajectoryPoint()
+        # ---- Point 0: IK solution (pre-throw) ----
+        pt0 = JointTrajectoryPoint()
+        pt0.positions = ik_positions
+        pt0.velocities = [0.0] * len(self.joint_names)
+        pt0.time_from_start.sec = 0
+        pt0.time_from_start.nanosec = 0
 
-        # Final positions
-        point.positions = target_pos
+        # ---- Point 1: After throw ----
+        pt1 = JointTrajectoryPoint()
+        pt1.positions = final_positions
+        pt1.velocities = [0.0] * len(self.joint_names)
+        pt1.time_from_start.sec = int(duration)
+        pt1.time_from_start.nanosec = int((duration - int(duration)) * 1e9)
 
-        # All joints zero velocity except the throwing joint
-        point.velocities = [0.0] * len(self.joint_names)
-        point.velocities[joint_index] = velocity
+        traj.points.append(pt0)
+        traj.points.append(pt1)
 
-        # Required time_from_start so the controller actually executes it
-        point.time_from_start.sec = int(duration)
-        point.time_from_start.nanosec = int((duration - int(duration)) * 1e9)
-
-        traj.points.append(point)
-
+        # -----------------------------------------
+        # 5) Publish the trajectory
+        # -----------------------------------------
         self.get_logger().info(
-            f"Throwing with joint {joint_index}, vel={velocity}, duration={duration:.2f}s"
+            f"Throwing with joint 4: {start_throw_angle:.2f} → {final_throw_angle:.2f} "
+            f"in {duration:.2f}s"
         )
+
         self.joint_pub.publish(traj)
-        self.get_logger().info("Velocity Joint Trajectory published.")
-        # Ball to velocity has occured
-
-        # opening gripper after waiting a time period of duration
 
 
-        # self._toggle_gripper()
-        # self.get_logger().info("Gripper toggled - ball thrown")
 
 
 
