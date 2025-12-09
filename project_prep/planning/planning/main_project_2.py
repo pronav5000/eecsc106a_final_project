@@ -11,12 +11,14 @@ from moveit_msgs.msg import RobotTrajectory
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from sensor_msgs.msg import JointState
 from tf2_ros import Buffer, TransformListener
+import tf2_geometry_msgs
 from scipy.spatial.transform import Rotation as R
 import numpy as np
 import time
 
 from builtin_interfaces.msg import Duration
 from planning.ik import IKPlanner
+from planning.jacobian import JacobianPlanner
 
 
 def bezier_curve(p0, p1, p2, p3, t):
@@ -58,6 +60,7 @@ class UR7e_CubeGrasp(Node):
         self.joint_state = None
 
         self.ik_planner = IKPlanner()
+        self.jac_planner = JacobianPlanner()
 
         # Single unified queue (keeps your structure)
         # Entries: JointState or 'toggle_grip' or ['throw_ball', x, y, z]
@@ -76,7 +79,10 @@ class UR7e_CubeGrasp(Node):
         self.follow_through_dist = 0.08  # meters
 
         # Timer to check pending release during trajectory execution
-        self.create_timer(0.01, self._check_release_timer)
+        self.create_timer(0.1, self._check_release_timer)
+
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
 
     # -----------------------
     # Callbacks
@@ -90,9 +96,20 @@ class UR7e_CubeGrasp(Node):
 
         # if self.joint_state is None:
         #     self.get_logger().info("No joint state yet, cannot proceed")
-        #     return
-
+        #     return,
         self.cube_pose = cube_pose
+        try:
+            transform = self.tf_buffer.lookup_transform('base_link', cube_pose.header.frame_id, rclpy.time.Time())
+        except:
+            self.get_logger().info("Transform not available to look up for ball")
+            self.cube_pose = None
+            return
+        
+        transformed_point = tf2_geometry_msgs.do_transform_point(cube_pose, transform)
+
+        # The transformed point is now in the base_link frame
+        transformed_position = transformed_point.point
+        self.cube_pose.point = transformed_position
 
     def cup_callback(self, cup_pose: PointStamped):
         print('entered callback')
@@ -108,8 +125,25 @@ class UR7e_CubeGrasp(Node):
         if self.cube_pose is None:
             self.get_logger().info("No ball detected, cannot proceed")
             return
-
+        
+        if cup_pose is None:
+            self.get_logger().info("cup pose is none")
+            return
+        print('cup', cup_pose)
         self.cup_pose = cup_pose
+
+        try:
+            transform = self.tf_buffer.lookup_transform('base_link', cup_pose.header.frame_id, rclpy.time.Time())
+        except:
+            self.get_logger().info("Transform not available to look up for cup")
+            self.cup_pose = None
+            return
+        
+        transformed_point = tf2_geometry_msgs.do_transform_point(cup_pose, transform)
+
+        # The transformed point is now in the base_link frame
+        transformed_position = transformed_point.point
+        self.cup_pose.point = transformed_position
 
         print("Cup pose: ", self.cup_pose) # Debugging
         print("Cube pose: ", self.cube_pose) # Debugging
@@ -121,38 +155,50 @@ class UR7e_CubeGrasp(Node):
         # Build job queue exactly like your original code
         # -----------------------------------------------------------
         self.get_logger().info(f"Job queue length after building: {len(self.job_queue)}")
-        # 1) Move to Pre-Grasp Position (gripper above the cube)
-        x = self.cube_pose.point.x
-        y = self.cube_pose.point.y - 0.035
-        z = self.cube_pose.point.z + 0.185
-        state_1 = self.ik_planner.compute_ik(self.joint_state, x, y, z)
-        self.job_queue.append(state_1)
-        print('Append 1:', self.job_queue)
         
-        # 2) Move to Grasp Position (lower the gripper to the cube)
-        x = self.cube_pose.point.x
-        y = self.cube_pose.point.y - 0.027
-        z = self.cube_pose.point.z + 0.16
-        state_2 = self.ik_planner.compute_ik(self.joint_state, x, y, z)
-        self.job_queue.append(state_2)
-        print('Append 2:', self.job_queue)
+        # 1) Move to Pre-Grasp Position (gripper above the cube)
+        '''
+        Use the following offsets for pre-grasp position:
+        x offset: 0.0
+        y offset: -0.035 (Think back to lab 5, why is this needed?)
+        z offset: +0.185 (to be above the cube by accounting for gripper length)
+        '''
+        self.get_logger().info("Starting joint solution calculation")
+        self.get_logger().info(f"x: {self.cube_pose.point.x}")
+        self.get_logger().info(f"y: {self.cube_pose.point.y}")
+        self.get_logger().info(f"z: {self.cube_pose.point.z}")
 
-        # 3) Close the gripper.
+        offset_x, offset_y, offset_z = 0.0, -0.035, 0.185
+
+        joint_sol_1 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z)
+        self.job_queue.append(joint_sol_1)
+        if joint_sol_1 is not None:
+            self.get_logger().info("Joint solution 1 computed succesfully.")
+
+        # 2) Move to Grasp Position (lower the gripper to the cube)
+        '''
+        Note that this will again be defined relative to the cube pose. 
+        DO NOT CHANGE z offset lower than +0.16. 
+        '''
+        joint_sol_2 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y -0.01, self.cube_pose.point.z + offset_z -0.02)
+        self.job_queue.append(joint_sol_2)
+        if joint_sol_2 is not None:
+            self.get_logger().info("Joint solution 2 computed succesfully.")
+
+        # 3) Close the gripper. See job_queue entries defined in init above for how to add this action.
         self.job_queue.append('toggle_grip')
 
         # 4) Move back to Pre-Grasp Position
-        x = self.cube_pose.point.x
-        y = self.cube_pose.point.y - 0.035
-        z = self.cube_pose.point.z + 0.185
-        state_3 = self.ik_planner.compute_ik(self.joint_state, x, y, z)
-        self.job_queue.append(state_3)
-        print('Append 4:', self.job_queue)
-
+        joint_sol_3 = self.ik_planner.compute_ik(self.joint_state, self.cup_pose.point.x + offset_x + 0.4, self.cup_pose.point.y + offset_y, self.cube_pose.point.z + offset_z + 0.2)
+        self.job_queue.append(joint_sol_3)
+        if joint_sol_3 is not None:
+            self.get_logger().info("Joint solution 3 computed succesfully.")
+            
         # 5) Throw preparation: add throw job (single entry)
         # (x, y, z here are unused in _throw_ball but we keep them to match your structure)
-        x = self.cup_pose.point.x + 0.4
+        x = self.cup_pose.point.x + 0.2
         y = self.cup_pose.point.y
-        z = self.cup_pose.point.z + 0.18
+        z = self.cup_pose.point.z 
         self.job_queue.append(['throw_ball', x, y, z])
         print('Append 5:', self.job_queue)
 

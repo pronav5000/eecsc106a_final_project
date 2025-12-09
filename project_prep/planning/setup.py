@@ -28,6 +28,7 @@ setup(
         'console_scripts': [
             'task_master = planning.main_project_2:main',
             'ik = planning.ik:main',
+            'jac = planning.jacobian:main',
             'main = planning.main:main',
             'tf = planning.static_tf_transform:main',
         ],

@@ -51,7 +51,7 @@ def generate_launch_description():
 
     ar_marker_launch_arg = DeclareLaunchArgument(
         'ar_marker',
-        default_value='ar_marker_7'
+        default_value='ar_marker_9'
     )
     ar_marker = LaunchConfiguration('ar_marker')
 
@@ -84,20 +84,26 @@ def generate_launch_description():
         output='screen'
     )
 
-
-    # taskmaster_node = Node(
-    #     package='planning',
-    #     executable='task_master',
-    #     name='task_master',
-    #     output='screen'
-    # )
+    jac_node = Node(
+        package='planning',
+        executable='jac',
+        name='jac',
+        output='screen'
+    )
 
     taskmaster_node = Node(
         package='planning',
-        executable='main',
-        name='main',
+        executable='task_master',
+        name='task_master',
         output='screen'
     )
+
+    # taskmaster_node = Node(
+    #     package='planning',
+    #     executable='main',
+    #     name='main',
+    #     output='screen'
+    # )
 
     ur_type = LaunchConfiguration("ur_type", default="ur7e")
     launch_rviz = LaunchConfiguration("launch_rviz", default="true")
@@ -134,6 +140,7 @@ def generate_launch_description():
         aruco_launch,
         moveit_launch,
         ik_node,
+        jac_node,
         taskmaster_node,
         shutdown_on_exit
     ])

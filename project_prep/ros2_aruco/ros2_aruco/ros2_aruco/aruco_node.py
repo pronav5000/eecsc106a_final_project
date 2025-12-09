@@ -136,7 +136,7 @@ class ArucoNode(rclpy.node.Node):
         self.get_logger().info(f"Marker size: {self.marker_size}")
         
         self.marker_size_map = {1: 0.15, 2: 0.15, 3: 0.15, 4: 0.15, 5: 0.15, 11: 0.15, 
-                                6: 0.15, 7: 0.15, 8: 0.15, 9: 0.15, 10: 0.15, 20: 0.15, 21: 0.15}
+                                6: 0.15, 7: 0.15, 8: 0.15, 9: 0.15, 10: 0.15, 20: 0.10, 21: 0.035}
         self.get_logger().info(f"Marker size map for marker ids is: {self.marker_size_map}")
 
         dictionary_id_name = (
@@ -230,49 +230,73 @@ class ArucoNode(rclpy.node.Node):
             # process each marker individually to allow for diff marker sizes
             rvecs = []
             tvecs = []
-            turtlebot_corners = []
-            turtlebot_markers = []
+            ur7e_corners = []
+            ur7e_markers = []
+            cup_corners = []
+            cup_markers = []
+            ball_corners = []
+            ball_markers = []
             goal_corners = []
             goal_markers = []
             final_marker_ids = []
             for i, marker_id in enumerate(marker_ids):
                 marker_size = self.marker_size_map[marker_id[0]]
-                if marker_size == 0.05:
-                    turtlebot_corners.append(corners[i])
-                    turtlebot_markers.append(marker_id)
-                elif marker_size == 0.15:
-                    goal_corners.append(corners[i])
-                    goal_markers.append(marker_id)
-
-            if len(goal_markers) > 0:
-                goal_rvecs, goal_tvecs = [], []
+                if marker_size == 0.15:
+                    ur7e_corners.append(corners[i])
+                    ur7e_markers.append(marker_id)
+                elif marker_size == 0.10:
+                    cup_corners.append(corners[i])
+                    cup_markers.append(marker_id)                    
+                elif marker_size == 0.035:
+                    ball_corners.append(corners[i])
+                    ball_markers.append(marker_id)
+                goal_corners.append(corners[i])
+                goal_markers.append(marker_id)
+            if len(ur7e_markers) > 0:
+                ur7e_rvecs, ur7e_tvecs = [], []
                 if cv2.__version__ > "4.0.0":
-                    goal_rvecs, goal_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
-                        goal_corners, 0.15, self.intrinsic_mat, self.distortion
+                    ur7e_rvecs, ur7e_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
+                        ur7e_corners, 0.15, self.intrinsic_mat, self.distortion
                     )
                 else:
-                    goal_rvecs, goal_tvecs = cv2.aruco.estimatePoseSingleMarkers(
-                        goal_corners, goal_markers, self.intrinsic_mat, self.distortion
+                    ur7e_rvecs, ur7e_tvecs = cv2.aruco.estimatePoseSingleMarkers(
+                        ur7e_corners, ur7e_markers, self.intrinsic_mat, self.distortion
                     )
-                self.get_logger().info(f"info is {goal_rvecs}, {goal_tvecs}")
-                self.get_logger().info(f"info is {goal_markers}")
-                rvecs.extend(goal_rvecs)
-                tvecs.extend(goal_tvecs)
-                final_marker_ids.extend(goal_markers)
+                # self.get_logger().info(f"info is {goal_markers}")
+                # self.get_logger().info(f"info is {ur7e_rvecs}, {ur7e_tvecs}")
+                rvecs.extend(ur7e_rvecs)
+                tvecs.extend(ur7e_tvecs)
+                final_marker_ids.extend(ur7e_markers)
 
-            if len(turtlebot_markers) > 0:
-                turtlebot_rvecs, turtlebot_tvecs = [], []
+            if len(cup_markers) > 0:
+                cup_rvecs, cup_tvecs = [], []
                 if cv2.__version__ > "4.0.0":
-                    turtlebot_rvecs, turtlebot_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
-                        turtlebot_corners, 0.05, self.intrinsic_mat, self.distortion
+                    cup_rvecs, cup_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
+                        cup_corners, 0.10, self.intrinsic_mat, self.distortion
                     )
                 else:
-                    turtlebot_rvecs, turtlebot_tvecs = cv2.aruco.estimatePoseSingleMarkers(
-                        turtlebot_corners, turtlebot_markers, self.intrinsic_mat, self.distortion
+                    cup_rvecs, cup_tvecs = cv2.aruco.estimatePoseSingleMarkers(
+                        cup_corners, cup_markers, self.intrinsic_mat, self.distortion
                     )
-                rvecs.extend(turtlebot_rvecs)
-                tvecs.extend(turtlebot_tvecs)
-                final_marker_ids.extend(turtlebot_markers)
+                #self.get_logger().info(f"info is {cup_rvecs}, {cup_tvecs}")
+                rvecs.extend(cup_rvecs)
+                tvecs.extend(cup_tvecs)
+                final_marker_ids.extend(cup_markers)
+
+            if len(ball_markers) > 0:
+                ball_rvecs, ball_tvecs = [], []
+                if cv2.__version__ > "4.0.0":
+                    ball_rvecs, ball_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
+                        ball_corners, 0.035, self.intrinsic_mat, self.distortion
+                    )
+                else:
+                    ball_rvecs, ball_tvecs = cv2.aruco.estimatePoseSingleMarkers(
+                        ball_corners, ball_markers, self.intrinsic_mat, self.distortion
+                    )
+                #self.get_logger().info(f"info is {ball_rvecs}, {ball_tvecs}")
+                rvecs.extend(ball_rvecs)
+                tvecs.extend(ball_tvecs)
+                final_marker_ids.extend(ball_markers)
 
             for i, marker_id in enumerate(final_marker_ids):
                 pose = Pose()

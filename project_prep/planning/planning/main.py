@@ -57,7 +57,13 @@ class UR7e_CubeGrasp(Node):
 
         self.cube_pose = cube_pose
 
-        transform = self.tf_buffer.lookup_transform(cube_pose.header.frame_id, 'base_link', rclpy.time.Time())
+        try:
+            transform = self.tf_buffer.lookup_transform('base_link', cube_pose.header.frame_id, rclpy.time.Time())
+        except:
+            self.get_logger().info("Transform not available to look up")
+            self.cube_pose = None
+            return
+        
         transformed_point = tf2_geometry_msgs.do_transform_point(cube_pose, transform)
 
         # The transformed point is now in the base_link frame
@@ -80,24 +86,36 @@ class UR7e_CubeGrasp(Node):
         y offset: -0.035 (Think back to lab 5, why is this needed?)
         z offset: +0.185 (to be above the cube by accounting for gripper length)
         '''
-        ...
-        joint_sol_1 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x-0.02, self.cube_pose.point.y - 0.035, self.cube_pose.point.z + 0.185)
+        self.get_logger().info("Starting joint solution calculation")
+        self.get_logger().info(f"x: {self.cube_pose.point.x}")
+        self.get_logger().info(f"y: {self.cube_pose.point.y}")
+        self.get_logger().info(f"z: {self.cube_pose.point.z}")
+
+        offset_x, offset_y, offset_z = 0.0, -0.035, 0.185
+
+        joint_sol_1 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z)
         self.job_queue.append(joint_sol_1)
+        if joint_sol_1 is not None:
+            self.get_logger().info("Joint solution 1 computed succesfully.")
 
         # 2) Move to Grasp Position (lower the gripper to the cube)
         '''
         Note that this will again be defined relative to the cube pose. 
         DO NOT CHANGE z offset lower than +0.16. 
         '''
-        joint_sol_2 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x-0.02, self.cube_pose.point.y - 0.035, self.cube_pose.point.z + 0.16)
+        joint_sol_2 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y -0.01, self.cube_pose.point.z + offset_z -0.02)
         self.job_queue.append(joint_sol_2)
+        if joint_sol_2 is not None:
+            self.get_logger().info("Joint solution 2 computed succesfully.")
 
         # 3) Close the gripper. See job_queue entries defined in init above for how to add this action.
         self.job_queue.append('toggle_grip')
         
         # 4) Move back to Pre-Grasp Position
-        joint_sol_3 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x-0.02, self.cube_pose.point.y - 0.035, self.cube_pose.point.z + 0.185)
+        joint_sol_3 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z + 0.1)
         self.job_queue.append(joint_sol_3)
+        if joint_sol_3 is not None:
+            self.get_logger().info("Joint solution 3 computed succesfully.")
 
 
         # 5) Move to release Position
@@ -105,8 +123,10 @@ class UR7e_CubeGrasp(Node):
         We want the release position to be 0.4m on the other side of the aruco tag relative to initial cube pose.
         Which offset will you change to achieve this and in what direction?
         '''        
-        joint_sol_4 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + 0.38, self.cube_pose.point.y - 0.035, self.cube_pose.point.z + 0.16)
+        joint_sol_4 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z)
         self.job_queue.append(joint_sol_4)
+        if joint_sol_4 is not None:
+            self.get_logger().info("Joint solution 4 computed succesfully.")
 
         # 6) Release the gripper
         self.job_queue.append('toggle_grip')
