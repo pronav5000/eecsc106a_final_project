@@ -124,7 +124,7 @@ class UR7e_CubeGrasp(Node):
         self.get_logger().info(f"y: {self.cube_pose.point.y}")
         self.get_logger().info(f"z: {self.cube_pose.point.z}")
 
-        offset_x, offset_y, offset_z = 0.0, -0.035, 0.185
+        offset_x, offset_y, offset_z = -0.025, -0.04, 0.30
 
         joint_sol_1 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z)
         self.job_queue.append(joint_sol_1)
@@ -136,7 +136,7 @@ class UR7e_CubeGrasp(Node):
         Note that this will again be defined relative to the cube pose. 
         DO NOT CHANGE z offset lower than +0.16. 
         '''
-        joint_sol_2 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y + 0.02, self.cube_pose.point.z + offset_z -0.02)
+        joint_sol_2 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z -0.045)
         self.job_queue.append(joint_sol_2)
         if joint_sol_2 is not None:
             self.get_logger().info("Joint solution 2 computed succesfully.")
