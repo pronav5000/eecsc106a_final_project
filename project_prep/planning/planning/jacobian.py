@@ -1,42 +1,29 @@
 import rclpy
 from rclpy.node import Node
-import moveit_commander
-from moveit_commander import RobotCommander, PlanningSceneInterface, MoveGroupCommander
+from moveit.core.robot_state import RobotState
 import numpy as np
+import tf2_ros
 from sensor_msgs.msg import JointState
 import sys
+
 
 class JacobianPlanner(Node):
     def __init__(self):
         super().__init__('jacobian_planner')
-        
-        # ---- Initialize MoveIt ----
-        moveit_commander.roscpp_initialize(sys.argv)
-        self.robot = RobotCommander()
-        self.scene = PlanningSceneInterface()
-        self.group = MoveGroupCommander("ur_manipulator")  # Replace with your actual group name
+        self.robot_state = RobotState()
 
-    def get_jacobian_for_current_state(self, joint_state):
-        # Set the robot's current joint values
-        self.group.set_joint_value_target(joint_state)
-        
-        # Compute the Jacobian matrix at the current joint configuration
-        jacobian = self.group.get_jacobian_matrix(self.group.get_current_joint_values())
-        
+    def compute_jacobian(self, joint_state):
+        robot_state = RobotState(self.robot.get_robot_model())
+        robot_state.set_joint_group_positions("manipulator", joint_state)
+
+        reference_point_position = np.array([0,0,0])
+        link_name = "wrist3_link"
+        jacobian = robot_state.get_jacobian(
+            joint_model_group_name="ur_manipulator",
+            link_name=link_name,
+            reference_point_position=reference_point_position
+        )       
         return jacobian
-    
-    def compute_joint_velocities(self, current_joint_state, linear_velocity, angular_velocity):
-        # Get the Jacobian matrix for the current joint state
-        jacobian = self.get_jacobian_for_current_state(current_joint_state)
-        
-        # Combine the linear and angular velocities into a single vector
-        end_effector_velocity = np.array([linear_velocity[0], linear_velocity[1], linear_velocity[2],
-                                          angular_velocity[0], angular_velocity[1], angular_velocity[2]])
-        
-        # Compute joint velocities: dot(Jacobian^-1, velocity)
-        joint_velocities = np.linalg.inv(jacobian) @ end_effector_velocity
-        
-        return joint_velocities
 
 def main(args=None):
     rclpy.init(args=args)
