@@ -45,7 +45,7 @@ class IKPlanner(Node):
     # TODO: Compute IK for a given (x, y, z) + quat and current robot joint state
     # -----------------------------------------------------------
     def compute_ik(self, current_joint_state, x, y, z,
-                   qx=0.0, qy=1.0, qz=0.0, qw=0.0): # Think about why the default quaternion is like this. Why is qy=1?
+                   qx=0.0, qy=1.0, qz=0.0, qw=0.0, joint = 'wrist_3_link'): # Think about why the default quaternion is like this. Why is qy=1?
         pose = PoseStamped()
         pose.header.frame_id = 'base_link'
         #pose.pose = ... # TODO: There are multiple parts/lines to fill here!
@@ -64,7 +64,7 @@ class IKPlanner(Node):
         ik_req.ik_request.timeout = Duration(sec=2)
         ik_req.ik_request.group_name = 'ur_manipulator'
         ik_req.ik_request.pose_stamped = pose
-        ik_req.ik_request.ik_link_name = 'wrist_3_link'
+        ik_req.ik_request.ik_link_name = joint
         ik_req.ik_request.timeout.sec = 10
         ik_req.ik_request.robot_state.joint_state = current_joint_state
         
@@ -121,8 +121,6 @@ class IKPlanner(Node):
         self.get_logger().info('Motion plan computed successfully.')
 
         trajectory = result.motion_plan_response.trajectory
-        for point, vel in zip(trajectory.points, target_joint_state.velocity):
-            point.velocities = [vel] * len(point.positions)
 
         return trajectory
 

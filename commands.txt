@@ -1,0 +1,9 @@
+ros2 launch usb_cam camera.launch.py
+
+ros2 launch ros2_aruco aruco_recognition.launch.py 
+
+colcon build --packages-select perception usb_cam ros2_aruco
+
+ros2 topic echo /cup_pose
+
+ros2 run ur7e_utils enable_comms
