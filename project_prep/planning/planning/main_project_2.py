@@ -14,7 +14,6 @@ import numpy as np
 import tf2_geometry_msgs
 from tf2_ros import TransformException
 from ur_msgs.srv import SetSpeedSliderFraction
-from tf_transformations import quaternion_from_matrix
 import time
 
 
@@ -264,17 +263,18 @@ class UR7e_CubeGrasp(Node):
         z_axis = np.cross(y_axis, up)
         z_axis /= np.linalg.norm(z_axis)
 
-        x_axis = np.cross(z_axis, y_axis)
+        x_axis = -1*np.cross(z_axis, y_axis)
         x_axis /= np.linalg.norm(x_axis)
 
         # Rotation matrix whose columns are [x, y, z]
-        R = np.eye(4)
-        R[0:3, 0] = x_axis
-        R[0:3, 1] = y_axis
-        R[0:3, 2] = z_axis
+        Rot = np.zeros((3,3))
+        Rot[:, 0] = x_axis
+        Rot[:, 1] = y_axis
+        Rot[:, 2] = z_axis
 
-        q = quaternion_from_matrix(R)
-        return q  # (qx, qy, qz, qw)
+        rot = R.from_matrix(Rot[0:3, 0:3])
+        qx, qy, qz, qw = rot.as_quat()
+        return [qx, qy, qz, qw]  # (qx, qy, qz, qw)
 
     def align_base(self):
         if self.joint_state is None or self.cup_pose is None:
@@ -292,17 +292,18 @@ class UR7e_CubeGrasp(Node):
         except TransformException as e:
             self.get_logger().error(f"TF error: {e}")
             return
+        self.get_logger().info('Trying transform')
 
         ee_pos = ee_tf.transform.translation
         ee = np.array([ee_pos.x, ee_pos.y, ee_pos.z])
 
-        cup = np.array([cup_in_base.pose.position.x,
-                        cup_in_base.pose.position.y,
-                        cup_in_base.pose.position.z])
+        cup = np.array([cup_in_base.point.x,
+                        cup_in_base.point.y,
+                        cup_in_base.point.z])
 
         d = cup - ee
         d_norm = d / np.linalg.norm(d)
-
+        self.get_logger().info('Getting quaternions')
         # 2) Build quaternion so EE's +y points at cup
         qx, qy, qz, qw = self.make_quat_ye_to_direction(d_norm)
 
@@ -356,10 +357,6 @@ class UR7e_CubeGrasp(Node):
         traj = self.ik_planner.plan_to_joints(target)
         self._execute_joint_trajectory(traj.joint_trajectory)
        
-
-
-    
-        
     def throw_ball(self,
                throw_angle=np.pi/2,
                throw_velocity=1.0):
