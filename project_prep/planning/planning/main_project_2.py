@@ -216,8 +216,8 @@ class UR7e_CubeGrasp(Node):
         # print('Job Queue', self.job_queue)
 
         # 7) Thow by publishing to joint states topic
-        self.job_queue.append(['wind_up', 1, 110 * np.pi / 180])
-        self.job_queue.append(['wind_up', 2, 120 * np.pi / 180])
+        self.job_queue.append(['wind_up', 1, 120 * np.pi / 180])
+        self.job_queue.append(['wind_up', 2, 90 * np.pi / 180])
 
         self.job_queue.append('throw_ball')
         self.job_queue.append('reset_speed')
