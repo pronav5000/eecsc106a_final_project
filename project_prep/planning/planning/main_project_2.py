@@ -12,6 +12,7 @@ from tf2_ros import Buffer, TransformListener
 from scipy.spatial.transform import Rotation as R
 import numpy as np
 import tf2_geometry_msgs
+from tf2_ros import TransformException
 from ur_msgs.srv import SetSpeedSliderFraction
 import time
 
@@ -152,6 +153,7 @@ class UR7e_CubeGrasp(Node):
         self.get_logger().info(f"y: {self.cube_pose.point.y}")
         self.get_logger().info(f"z: {self.cube_pose.point.z}")
 
+        # offset_x, offset_y, offset_z = 0.018, -0.02, 0.25
         offset_x, offset_y, offset_z = 0.018, -0.02, 0.25
 
         joint_sol_1 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z)
@@ -216,8 +218,8 @@ class UR7e_CubeGrasp(Node):
         # print('Job Queue', self.job_queue)
 
         # 7) Thow by publishing to joint states topic
-        self.job_queue.append(['wind_up', 1, 110 * np.pi / 180])
-        self.job_queue.append(['wind_up', 2, 120 * np.pi / 180])
+        self.job_queue.append(['wind_up', 1, 120 * np.pi / 180])
+        self.job_queue.append(['wind_up', 2, 90 * np.pi / 180])
 
         self.job_queue.append('throw_ball')
         self.job_queue.append('reset_speed')
@@ -227,7 +229,7 @@ class UR7e_CubeGrasp(Node):
         if self.joint_state is None:
             self.get_logger().error("No joint state available! Can't throw.")
             return
-        degree_offset = 10 * np.pi / 180
+        # degree_offset = 10 * np.pi / 180
         # ---------------------------------------------
         # 2) Call IK to get joint positions for the pose
         # ---------------------------------------------
@@ -237,18 +239,105 @@ class UR7e_CubeGrasp(Node):
 
         # The transformed point is now in the base_link frame
         transformed_position = transformed_point.point
-
-        base_joint_angle = np.arctan2(transformed_position.y, transformed_position.x)
+        base_joint_angle = 5.293953895568848
+        # base_joint_angle = np.arctan2(transformed_position.y, transformed_position.x)
         target = JointState()
         target.header = self.joint_state.header
         target.name = list(self.joint_state.name)
         target.position = list(self.joint_state.position)
-        target.position[5] = target.position[5] + base_joint_angle + degree_offset
+        target.position[5] = base_joint_angle
         target.velocity = [0.0]*6
         target.velocity[5] = 1.0
 
         traj = self.ik_planner.plan_to_joints(target)
         self._execute_joint_trajectory(traj.joint_trajectory)
+
+    def make_quat_ye_to_direction(self, d_norm):
+        # d_norm: np.array([dx, dy, dz]) unit vector
+        y_axis = d_norm
+
+        # pick an approximate "up" vector; avoid collinearity
+        up = np.array([0.0, 0.0, 1.0])
+        if abs(np.dot(up, y_axis)) > 0.9:
+            up = np.array([1.0, 0.0, 0.0])
+
+        z_axis = np.cross(y_axis, up)
+        z_axis /= np.linalg.norm(z_axis)
+
+        x_axis = -1*np.cross(z_axis, y_axis)
+        x_axis /= np.linalg.norm(x_axis)
+
+        # Rotation matrix whose columns are [x, y, z]
+        Rot = np.zeros((3,3))
+        Rot[:, 0] = x_axis
+        Rot[:, 1] = y_axis
+        Rot[:, 2] = z_axis
+
+        rot = R.from_matrix(Rot[0:3, 0:3])
+        qx, qy, qz, qw = rot.as_quat()
+        return [qx, qy, qz, qw]  # (qx, qy, qz, qw)
+
+    # def align_base(self):
+    #     if self.joint_state is None or self.cup_pose is None:
+    #         self.get_logger().error("Need current joint state and cup pose.")
+    #         return
+
+    #     # 1) Get EE pose (wrist_3_link) and cup pose in base_link frame
+    #     #    We assume cup_pose is already in base_link
+    #     cup_in_base = self.cup_pose  # header.frame_id == 'base_link'
+
+    #     try:
+    #         ee_tf = self.tf_buffer.lookup_transform(
+    #             'base_link', 'wrist_3_link', rclpy.time.Time()
+    #         )
+    #     except TransformException as e:
+    #         self.get_logger().error(f"TF error: {e}")
+    #         return
+    #     self.get_logger().info('Trying transform')
+
+    #     ee_pos = ee_tf.transform.translation
+    #     ee = np.array([ee_pos.x, ee_pos.y, ee_pos.z])
+
+    #     cup = np.array([cup_in_base.point.x,
+    #                     cup_in_base.point.y,
+    #                     cup_in_base.point.z])
+
+    #     d = cup - ee
+    #     d_norm = d / np.linalg.norm(d)
+    #     self.get_logger().info('Getting quaternions')
+    #     # 2) Build quaternion so EE's +y points at cup
+    #     qx, qy, qz, qw = self.make_quat_ye_to_direction(d_norm)
+
+    #     # 3) Call IK to get a solution that points the EE's y-axis at the cup
+    #     ik_result = self.ik_planner.compute_ik(
+    #         self.joint_state,
+    #         ee[0], ee[1], ee[2],
+    #         qx, qy, qz, qw,
+    #         joint='wrist_3_link'
+    #     )
+    #     if ik_result is None:
+    #         self.get_logger().error("IK failed for pointing pose.")
+    #         return
+
+    #     # 4) Extract only the base joint angle from IK and build a base-only target
+    #     target = JointState()
+    #     target.header = self.joint_state.header
+    #     target.name = list(self.joint_state.name)
+    #     target.position = list(self.joint_state.position)
+
+    #     base_idx = target.name.index('shoulder_pan_joint')
+    #     ik_base_idx = ik_result.name.index('shoulder_pan_joint')
+
+    #     target.position[base_idx] = ik_result.position[ik_base_idx]
+
+    #     # 5) Plan & execute motion where only base changes
+    #     traj = self.ik_planner.plan_to_joints(target)
+    #     if traj is None:
+    #         self.get_logger().error("Planning failed.")
+    #         return
+
+    #     self._execute_joint_trajectory(traj.joint_trajectory)
+
     def wind_up(self, joint, angle):
     
         if self.joint_state is None:
@@ -269,10 +358,6 @@ class UR7e_CubeGrasp(Node):
         traj = self.ik_planner.plan_to_joints(target)
         self._execute_joint_trajectory(traj.joint_trajectory)
        
-
-
-    
-        
     def throw_ball(self,
                throw_angle=np.pi/2,
                throw_velocity=1.0):
@@ -300,7 +385,7 @@ class UR7e_CubeGrasp(Node):
         traj = self.ik_planner.plan_to_joints(target)
         self._execute_joint_trajectory(traj.joint_trajectory)
         self.get_logger().info("Toggling Gripper")
-        self.timer = self.create_timer(1, self.execute_gripper_toggle)
+        self.timer = self.create_timer(0.82, self.execute_gripper_toggle)
 
 
 
