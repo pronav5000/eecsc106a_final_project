@@ -100,7 +100,7 @@ def align_base(self):
     best_err = float('inf')
 
     for i in range(num_samples):
-        alpha = -window + (2.0 * window) * (i / (num_samples - 1))
+        alpha = -window * (i / (num_samples - 1))
         theta_candidate = theta_guess + alpha
         delta = theta_candidate - theta0
 
