@@ -24,8 +24,8 @@ class UR7e_CubeGrasp(Node):
         super().__init__('cube_grasp')
         
 
-        self.cube_pub = self.create_subscription(PointStamped, '/ball_pos', self.cube_callback, 1) # TODO: CHECK IF TOPIC ALIGNS WITH YOURS
-        self.cube_sub = self.create_subscription(PointStamped, '/cup_point', self.cup_callback, 1) #
+        self.cube_pub = self.create_subscription(PointStamped, '/ball_pos', self.cube_callback, 1) 
+        self.cube_sub = self.create_subscription(PointStamped, '/cup_point', self.cup_callback, 1) 
         self.joint_state_sub = self.create_subscription(JointState, '/joint_states', self.joint_state_callback, 1)
 
         self.joint_pub = self.create_publisher(JointTrajectory, '/scaled_joint_trajectory_controller/joint_trajectory', 10)
@@ -53,28 +53,11 @@ class UR7e_CubeGrasp(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        self.job_queue = [] # Entries should be of type either JointState or String('toggle_grip')
+        self.job_queue = [] 
    
 
     def joint_state_callback(self, msg: JointState):
         self.joint_state = msg
-    
-    def set_speed(self, fraction):
-        """Sets the speed slider fraction."""
-        if not self.speed_slider_cli.service_is_ready():
-            self.get_logger().warn("Speed slider service is not ready")
-            return
-
-        request = SetSpeedSliderFraction.Request()
-        request.speed_slider_fraction = fraction
-
-        future = self.speed_slider_cli.call_async(request)
-        rclpy.spin_until_future_complete(self, future)
-        
-        if future.result() is not None:
-            self.get_logger().info(f"Speed set to {fraction}")
-        else:
-            self.get_logger().error("Failed to set speed slider")
     
     def cup_callback(self, cup_pose):
         if cup_pose is None:
@@ -92,8 +75,6 @@ class UR7e_CubeGrasp(Node):
             return
         
         transformed_point = tf2_geometry_msgs.do_transform_point(cup_pose, transform)
-
-        # The transformed point is now in the base_link frame
         transformed_position = transformed_point.point
         self.cup_pose = cup_pose
         self.cup_pose.point = transformed_position
@@ -123,8 +104,6 @@ class UR7e_CubeGrasp(Node):
             return
         
         transformed_point = tf2_geometry_msgs.do_transform_point(cube_pose, transform)
-
-        # The transformed point is now in the base_link frame
         transformed_position = transformed_point.point
         self.cube_pose.point = transformed_position
         self.get_logger().info(f"Transformed ball position in base frame: X={transformed_position.x} Y={transformed_position.y} Z={transformed_position.z}")
@@ -132,14 +111,6 @@ class UR7e_CubeGrasp(Node):
         if self.cup_pose is None:
             self.get_logger().info("No cu[] position HELP")
             return
-
-            # Use the transformed position to compute IK
-        # -----------------------------------------------------------
-        # TODO: In the following section you will add joint angles to the job queue. 
-        # Entries of the job queue should be of type either JointState or String('toggle_grip')
-        # Think about you will leverage the IK planner to get joint configurations for the cube grasping task.
-        # To understand how the queue works, refer to the execute_jobs() function below.
-        # -----------------------------------------------------------
 
         # 1) Move to Pre-Grasp Position (gripper above the cube)
         '''
@@ -156,12 +127,14 @@ class UR7e_CubeGrasp(Node):
         # offset_x, offset_y, offset_z = 0.018, -0.02, 0.25
         offset_x, offset_y, offset_z = 0.018, -0.02, 0.25
 
+        # 1) Move to ball
+
         joint_sol_1 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z)
         self.job_queue.append(joint_sol_1)
         if joint_sol_1 is not None:
             self.get_logger().info("Joint solution 1 computed succesfully.")
 
-        # 2) Move to Grasp Position (lower the gripper to the cube)
+        # 2) Move to Grasp Position (lower the gripper to the cube) (Do not change z offset lower than +0.16)
         '''
         Note that this will again be defined relative to the cube pose. 
         DO NOT CHANGE z offset lower than +0.16. 
@@ -181,28 +154,10 @@ class UR7e_CubeGrasp(Node):
             self.get_logger().info("Joint solution 3 computed succesfully.")
 
 
-        # 5) Move to release Position
-        '''
-        We want the release position to be 0.4m on the other side of the aruco tag relative to initial cube pose.
-        Which offset will you change to achieve this and in what direction?
-        '''        
-        # joint_sol_4 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x -0.4, self.cup_pose.point.y + offset_y, self.cube_pose.point.z + offset_z + 0.5)
-        # self.job_queue.append(joint_sol_4)
-        # if joint_sol_4 is not None:
-        #     self.get_logger().info("Joint solution 4 computed succesfully.")
-        
-        self.job_queue.append('restore_state')
+        # 5) Move to tucked Position
+        self.job_queue.append('wind_up')
 
-        # 5) Move to release Position
-        '''
-        We want the release position to be 0.4m on the other side of the aruco tag relative to initial cube pose.
-        Which offset will you change to achieve this and in what direction?
-        '''        
-        # joint_sol_5 = self.ik_planner.compute_ik(self.joint_state, 0.0, self.cup_pose.point.y, 0.5)
-        # self.job_queue.append(joint_sol_5)
-        # if joint_sol_5 is not None:
-        #     self.get_logger().info("Joint solution 4 computed succesfully.")
-
+        # 6) Move to align position
         self.job_queue.append('align_base')
         # joint_sol_4 = self.ik_planner.compute_ik(self.joint_state, self.cup_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z, qx=0.0, qy=1.0, qz=0.0, qw=0.0)
         # self.get_logger().info(f"{joint_sol_4}")
@@ -210,133 +165,32 @@ class UR7e_CubeGrasp(Node):
         # if joint_sol_4 is not None:
         #     self.get_logger().info("Joint solution 4 computed succesfully.")        
         
-        #self.job_queue.append('rotate_gripper')
-        
-
-        # # 6) Release the gripper
-        # self.job_queue.append('toggle_grip')
-        # print('Job Queue', self.job_queue)
-
-        # 7) Thow by publishing to joint states topic
-        self.job_queue.append(['wind_up', 1, 120 * np.pi / 180])
-        self.job_queue.append(['wind_up', 2, 90 * np.pi / 180])
-
-        self.job_queue.append('throw_ball')
-        self.job_queue.append('reset_speed')
+        # 7) Move to shoot position
+        self.job_queue.append('thow_ball')
         self.execute_jobs()
    
     def align_base(self):
         if self.joint_state is None:
             self.get_logger().error("No joint state available! Can't throw.")
             return
-        # degree_offset = 10 * np.pi / 180
-        # ---------------------------------------------
-        # 2) Call IK to get joint positions for the pose
-        # ---------------------------------------------
 
         transform = self.tf_buffer.lookup_transform('wrist_3_link', self.cup_pose.header.frame_id, rclpy.time.Time())
         transformed_point = tf2_geometry_msgs.do_transform_point(self.cup_pose, transform)
-
-        # The transformed point is now in the base_link frame
         transformed_position = transformed_point.point
-        base_joint_angle = 5.293953895568848
+        
+        # base_joint_angle = 5.293953895568848
+        offset_shoulder_pan = 0 # TODO: Fix offset
         # base_joint_angle = np.arctan2(transformed_position.y, transformed_position.x)
         target = JointState()
         target.header = self.joint_state.header
         target.name = list(self.joint_state.name)
         target.position = list(self.joint_state.position)
-        target.position[5] = base_joint_angle
+        target.position[5] = target.position[5] + offset_shoulder_pan
         target.velocity = [0.0]*6
         target.velocity[5] = 1.0
 
         traj = self.ik_planner.plan_to_joints(target)
         self._execute_joint_trajectory(traj.joint_trajectory)
-
-    def make_quat_ye_to_direction(self, d_norm):
-        # d_norm: np.array([dx, dy, dz]) unit vector
-        y_axis = d_norm
-
-        # pick an approximate "up" vector; avoid collinearity
-        up = np.array([0.0, 0.0, 1.0])
-        if abs(np.dot(up, y_axis)) > 0.9:
-            up = np.array([1.0, 0.0, 0.0])
-
-        z_axis = np.cross(y_axis, up)
-        z_axis /= np.linalg.norm(z_axis)
-
-        x_axis = -1*np.cross(z_axis, y_axis)
-        x_axis /= np.linalg.norm(x_axis)
-
-        # Rotation matrix whose columns are [x, y, z]
-        Rot = np.zeros((3,3))
-        Rot[:, 0] = x_axis
-        Rot[:, 1] = y_axis
-        Rot[:, 2] = z_axis
-
-        rot = R.from_matrix(Rot[0:3, 0:3])
-        qx, qy, qz, qw = rot.as_quat()
-        return [qx, qy, qz, qw]  # (qx, qy, qz, qw)
-
-    # def align_base(self):
-    #     if self.joint_state is None or self.cup_pose is None:
-    #         self.get_logger().error("Need current joint state and cup pose.")
-    #         return
-
-    #     # 1) Get EE pose (wrist_3_link) and cup pose in base_link frame
-    #     #    We assume cup_pose is already in base_link
-    #     cup_in_base = self.cup_pose  # header.frame_id == 'base_link'
-
-    #     try:
-    #         ee_tf = self.tf_buffer.lookup_transform(
-    #             'base_link', 'wrist_3_link', rclpy.time.Time()
-    #         )
-    #     except TransformException as e:
-    #         self.get_logger().error(f"TF error: {e}")
-    #         return
-    #     self.get_logger().info('Trying transform')
-
-    #     ee_pos = ee_tf.transform.translation
-    #     ee = np.array([ee_pos.x, ee_pos.y, ee_pos.z])
-
-    #     cup = np.array([cup_in_base.point.x,
-    #                     cup_in_base.point.y,
-    #                     cup_in_base.point.z])
-
-    #     d = cup - ee
-    #     d_norm = d / np.linalg.norm(d)
-    #     self.get_logger().info('Getting quaternions')
-    #     # 2) Build quaternion so EE's +y points at cup
-    #     qx, qy, qz, qw = self.make_quat_ye_to_direction(d_norm)
-
-    #     # 3) Call IK to get a solution that points the EE's y-axis at the cup
-    #     ik_result = self.ik_planner.compute_ik(
-    #         self.joint_state,
-    #         ee[0], ee[1], ee[2],
-    #         qx, qy, qz, qw,
-    #         joint='wrist_3_link'
-    #     )
-    #     if ik_result is None:
-    #         self.get_logger().error("IK failed for pointing pose.")
-    #         return
-
-    #     # 4) Extract only the base joint angle from IK and build a base-only target
-    #     target = JointState()
-    #     target.header = self.joint_state.header
-    #     target.name = list(self.joint_state.name)
-    #     target.position = list(self.joint_state.position)
-
-    #     base_idx = target.name.index('shoulder_pan_joint')
-    #     ik_base_idx = ik_result.name.index('shoulder_pan_joint')
-
-    #     target.position[base_idx] = ik_result.position[ik_base_idx]
-
-    #     # 5) Plan & execute motion where only base changes
-    #     traj = self.ik_planner.plan_to_joints(target)
-    #     if traj is None:
-    #         self.get_logger().error("Planning failed.")
-    #         return
-
-    #     self._execute_joint_trajectory(traj.joint_trajectory)
 
     def wind_up(self, joint, angle):
     
@@ -344,41 +198,30 @@ class UR7e_CubeGrasp(Node):
             self.get_logger().error("No joint state available! Can't throw.")
             return
 
-        # ---------------------------------------------
-        # 2) Call IK to get joint positions for the pose
-        # ---------------------------------------------
         target = JointState()
         target.header = self.joint_state.header
         target.name = list(self.joint_state.name)
-        target.position = list(self.joint_state.position)
-        target.position[joint] = target.position[joint] +  angle
-        target.velocity = [0.0]*6
-        target.velocity[joint] = 3
+        target.position = [] # TODO: fill with pre shoot position
 
         traj = self.ik_planner.plan_to_joints(target)
         self._execute_joint_trajectory(traj.joint_trajectory)
        
-    def throw_ball(self,
-               throw_angle=np.pi/2,
-               throw_velocity=1.0):
+    def throw_ball(self):
 
-        # ---------------------------------------------
-        # 1) MUST have the current joint state
-        # ---------------------------------------------
         self.set_speed(0.7)
 
         if self.joint_state is None:
             self.get_logger().error("No joint state available! Can't throw.")
             return
+        offset_shoulder_lift = 0
+        offset_elbow = 0
 
-        # ---------------------------------------------
-        # 2) Call IK to get joint positions for the pose
-        # ---------------------------------------------
         target = JointState()
         target.header = self.joint_state.header
         target.name = list(self.joint_state.name)
         target.position = list(self.joint_state.position)
-        target.position[1] = target.position[1] -  165 * np.pi / 180
+        target.position[0] = target.position[0] + offset_shoulder_lift
+        target.position[1] = target.position[1] + offset_elbow
         target.velocity = [0.0]*6
         target.velocity[1] = 10
 
@@ -388,26 +231,34 @@ class UR7e_CubeGrasp(Node):
         self.timer = self.create_timer(0.82, self.execute_gripper_toggle)
 
 
+    def set_speed(self, fraction):
+        """Sets the speed slider fraction."""
+        if not self.speed_slider_cli.service_is_ready():
+            self.get_logger().warn("Speed slider service is not ready")
+            return
+
+        request = SetSpeedSliderFraction.Request()
+        request.speed_slider_fraction = fraction
+
+        future = self.speed_slider_cli.call_async(request)
+        rclpy.spin_until_future_complete(self, future)
+        
+        if future.result() is not None:
+            self.get_logger().info(f"Speed set to {fraction}")
+        else:
+            self.get_logger().error("Failed to set speed slider")
 
     def reset_speed(self):
         self.set_speed(0.15)  # Reset to default speed (0.1 or your preferred default speed)
         self.get_logger().info("Speed reset to default.")
 
     
-    def restore_state(self,
-               throw_angle=np.pi/2,
-               throw_velocity=1.0):
+    def restore_state(self):
 
-        # ---------------------------------------------
-        # 1) MUST have the current joint state
-        # ---------------------------------------------
         if self.joint_state is None:
             self.get_logger().error("No joint state available! Can't throw.")
             return
-
-        # ---------------------------------------------
-        # 2) Call IK to get joint positions for the pose
-        # ---------------------------------------------
+        
         target = JointState()
         target.header = self.joint_state.header
         target.name = list(self.joint_state.name)
@@ -430,7 +281,6 @@ class UR7e_CubeGrasp(Node):
         # Proceed with the next job in the queue
         self.execute_jobs()  # Cont
         
-
 
     def execute_jobs(self):
         if not self.job_queue:
@@ -472,9 +322,6 @@ class UR7e_CubeGrasp(Node):
         elif isinstance(next_job, list) and next_job[0] == 'wind_up':
             self.get_logger().info("Winding")
             self.wind_up(next_job[1], next_job[2])
-            
-            
-
         else:
             self.get_logger().error("Unknown job type.")
             self.execute_jobs()  # Proceed to next job
