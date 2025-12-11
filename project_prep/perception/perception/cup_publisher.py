@@ -5,6 +5,7 @@ from rclpy.node import Node
 from geometry_msgs.msg import PointStamped
 from tf2_ros import Buffer, TransformListener
 from tf2_ros import TransformException
+import numpy as np
 
 
 class CupPosePublisher(Node):
@@ -32,6 +33,8 @@ class CupPosePublisher(Node):
             f"Publishing cup pose as TF({self.marker_id_2} → {self.marker_id})"
         )
 
+        self.samples = []
+
     def loop(self):
         try:
             tf_msg = self.tf_buffer.lookup_transform(
@@ -44,9 +47,24 @@ class CupPosePublisher(Node):
             p.header.frame_id = self.marker_id_2
             p.header.stamp = self.get_clock().now().to_msg()
 
-            p.point.x = tf_msg.transform.translation.x
-            p.point.y = tf_msg.transform.translation.y
-            p.point.z = tf_msg.transform.translation.z
+            pt = np.array([
+                tf_msg.transform.translation.x,
+                tf_msg.transform.translation.y,
+                tf_msg.transform.translation.z
+            ], dtype=float)
+
+            self.samples.append(pt)
+
+            if len(self.samples) > 10:
+                self.samples.pop(0)
+            
+            if len(self.samples) < 10:
+                return
+            
+            avg = np.mean(self.samples, axis=0)
+            p.point.x = avg[0]
+            p.point.y = avg[1]
+            p.point.z = avg[2]
 
 
             # pose = PoseStamped()
@@ -59,10 +77,11 @@ class CupPosePublisher(Node):
             # pose.pose.orientation = tf_msg.transform.rotation
 
             self.pub.publish(p)
+            #self.get_logger().info(f"Ball in camera frame: X={p.point.x:.2f} Y={p.point.y:.2f} Z={p.point.z:.2f}")
+
 
         except TransformException as e:
             self.get_logger().warn(f"Cannot lookup transform: {e}")
-
 
 def main(args=None):
     rclpy.init(args=args)
