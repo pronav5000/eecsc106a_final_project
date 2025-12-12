@@ -53,6 +53,9 @@ class BallPosePublisher(Node):
                 tf_msg.transform.translation.z
             ], dtype=float)
 
+            # if not np.any(np.isnan(pt)):
+            #     self.samples.append(pt)
+
             self.samples.append(pt)
 
             if len(self.samples) > 10:
