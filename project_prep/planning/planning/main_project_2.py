@@ -287,6 +287,7 @@ class UR7e_CubeGrasp(Node):
 
         for i in range(num_samples):
             alpha = -window * (i / (num_samples - 1))
+            # alpha = -window + (2.0 * window) * (i / (num_samples - 1)) - this is for two samples
             theta_candidate = theta_guess + alpha
             delta = theta_candidate - theta0
 
@@ -352,7 +353,7 @@ class UR7e_CubeGrasp(Node):
             return
         offset_shoulder_lift = -1.9057523212828578 - (-2.3977424106993617)
         offset_elbow = -2.3659281730651855 - (-0.9090007543563843)
-        offset_wrist_2 = 1.5
+        offset_wrist_1 = 0.28631338477134705 - (0.179469936558564)
 
         target = JointState()
         target.header = self.joint_state.header
@@ -360,8 +361,12 @@ class UR7e_CubeGrasp(Node):
         target.position = list(self.joint_state.position)
         target.position[0] = target.position[0] + offset_shoulder_lift
         target.position[1] = target.position[1] + offset_elbow
+        target.position[2] = target.position[2] + offset_wrist_1
+
         target.velocity = [0.0]*6
-        target.velocity[1] = 10
+        target.velocity[0] = 15
+        target.velocity[1] = 15
+        target.velocity[2] = 15
 
         traj = self.ik_planner.plan_to_joints(target)
         self._execute_joint_trajectory(traj.joint_trajectory)
