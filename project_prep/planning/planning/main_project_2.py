@@ -128,36 +128,36 @@ class UR7e_CubeGrasp(Node):
         self.get_logger().info(f"z: {self.cube_pose.point.z}")
 
         # offset_x, offset_y, offset_z = 0.018, -0.02, 0.25
-        offset_x, offset_y, offset_z = 0.018, -0.007, 0.21
+        offset_x, offset_y, offset_z = 0.018, -0.03, 0.25
 
         # 1) Move to ball
         #self.set_speed(0.6)
 
-        # self.get_logger().info("Attempting IK #1")
-        # joint_sol_1 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z)
-        # #self.job_queue.append(joint_sol_1)
-        # if joint_sol_1 is not None:
-        #     self.get_logger().info("Joint solution 1 computed succesfully.")
+        self.get_logger().info("Attempting IK #1")
+        joint_sol_1 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z)
+        self.job_queue.append(joint_sol_1)
+        if joint_sol_1 is not None:
+            self.get_logger().info("Joint solution 1 computed succesfully.")
 
         # 2) Move to Grasp Position (lower the gripper to the cube) (Do not change z offset lower than +0.16)
         '''
         Note that this will again be defined relative to the cube pose. 
         DO NOT CHANGE z offset lower than +0.16. 
         '''
-        # joint_sol_2 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z -0.045)
-        # #self.job_queue.append(joint_sol_2)
-        # if joint_sol_2 is not None:
-        #     self.get_logger().info("Joint solution 2 computed succesfully.")
+        joint_sol_2 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z -0.045)
+        self.job_queue.append(joint_sol_2)
+        if joint_sol_2 is not None:
+            self.get_logger().info("Joint solution 2 computed succesfully.")
 
         # 3) Close the gripper. See job_queue entries defined in init above for how to add this action.
-        #self.job_queue.append('toggle_grip')
+        self.job_queue.append('toggle_grip')
         
         # 4) Move back to Pre-Grasp Position
         # joint_sol_3 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z + 0.1)
         # #self.job_queue.append(joint_sol_3)
         # if joint_sol_3 is not None:
         #     self.get_logger().info("Joint solution 3 computed succesfully.")
-        # self.job_queue.append('restore_state')
+        self.job_queue.append('restore_state')
 
 
         # 5) Move to tucked Position
@@ -322,7 +322,7 @@ class UR7e_CubeGrasp(Node):
         target.header = self.joint_state.header
         target.name = list(self.joint_state.name)
         target.position = list(self.joint_state.position)
-        target.position[base_idx] += 30 * np.pi / 180
+        target.position[base_idx] += 30.5 * np.pi / 180
 
         #target.position[base_idx] += best_theta
 
@@ -343,16 +343,64 @@ class UR7e_CubeGrasp(Node):
         target = JointState()
         target.header = self.joint_state.header
         target.name = list(self.joint_state.name)
-        target.position = [-1.816378732720846,
-                            -2.5843124389648438,
-                            1.256711645717285 - np.pi/2,
-                            1.5894787311553955,
-                            -3.13440972963442,
-                           self.joint_state.position[5]] # TODO: fill with pre shoot position
+        # target.position = [-1.816378732720846,
+        #                     -2.5843124389648438,
+        #                     1.256711645717285 - np.pi/2,
+        #                     1.5894787311553955,
+        #                     -3.13440972963442,
+        #                    self.joint_state.position[5]] # TODO: fill with pre shoot position
+        # new wind up with jut
+        # target.position = [-.6800668400577088,
+        #                 -0.024349605664610863,
+        #                 -3.095457693139547,
+        #                 1.5982455015182495,
+        #                 -3.131937805806295,
+        #                 self.joint_state.position[5]] # TODO: fill with pre shoot position
+        # target.position = [-1.390868724589,
+        #                     -0.3077329397201538,
+        #                     -1.2858740550330658,
+        #                     1.5474151372909546,
+        #                     -3.133094135914938,
+        #                    self.joint_state.position[5]]
+
+        target.position = [-1.368044675593712,
+                           0.23849994341005498,
+                           -1.7610446415343226 + np.pi/2,
+                           1.5493460893630981,
+                           -3.1248191038714808,
+                            self.joint_state.position[5]]
         target.velocity = [1.0]*6
         traj = self.ik_planner.plan_to_joints(target)
         self._execute_joint_trajectory(traj.joint_trajectory)
-       
+
+    def scale_joint_trajectory_time(self, jt, scale: float):
+        eps = 1e-6  # 1 microsecond to ensure monotonicity
+
+        last_t = -1.0
+
+        for p in jt.points:
+            # convert to float seconds
+            t = p.time_from_start.sec + 1e-9 * p.time_from_start.nanosec
+
+            # scale time
+            t *= scale
+
+            # enforce strictly increasing time
+            if t <= last_t:
+                t = last_t + eps
+            last_t = t
+
+            # write back
+            p.time_from_start.sec = int(t)
+            p.time_from_start.nanosec = int((t - int(t)) * 1e9)
+
+            # scale derivatives
+            if p.velocities:
+                p.velocities = [v / scale for v in p.velocities]
+            if p.accelerations:
+                p.accelerations = [a / (scale * scale) for a in p.accelerations]
+
+
     def throw_ball(self):
 
         self.set_speed(0.9)
@@ -412,21 +460,52 @@ class UR7e_CubeGrasp(Node):
         target.header = self.joint_state.header
         target.name = list(self.joint_state.name)
         target.position = list(self.joint_state.position)
-        target.position[0] = -2.585226675073141
-        target.position[1] = -0.794704258441925
-        target.position[2] = 0.27991358816113276 - np.pi/2
-        target.position[3] = 1.5894336700439453
-        target.position[4] = self.joint_state.position[4]
-        target.position[5] = self.joint_state.position[5]
+        # target.position[0] = -2.585226675073141
+        # target.position[1] = -0.794704258441925
+        # target.position[2] = 0.27991358816113276 - np.pi/2
+        # target.position[3] = 1.5894336700439453
+        # target.position[4] = self.joint_state.position[4]
+        # target.position[5] = self.joint_state.position[5]
+        # target.position[0] = -2.9125215015807093
+        # target.position[1] = -0.024349605664610863
+        # target.position[2] = -3.095457693139547
+        # target.position[3] = 1.5982455015182495
+        # target.position[4] = -3.131937805806295
+        # target.position[5] = self.joint_state.position[5]
+
+        # [
+                        
+                        
+    
+
+        # target.position[0] = -2.5508114300169886
+        # target.position[1] = -1.4473183155059814
+        # target.position[2] = -0.591437892322876
+        # target.position[3] = 1.6218291521072388
+        # target.position[4] = -3.125781838093893
+        # target.position[5] = self.joint_state.position[5]
+
+        target.position = [
+            -3.16737618806883753,
+            0.17614967027773076,
+            -1.7613245449461878 + np.pi/2,
+            1.549370527267456,
+            -3.1248038450824183,
+            self.joint_state.position[5]
+        ]
       
 
+        # traj = self.ik_planner.plan_to_joints(target)
         traj = self.ik_planner.plan_to_joints(target)
+        self.scale_joint_trajectory_time(traj.joint_trajectory, scale=0.8)  # slower
+        # self._execute_joint_trajectory(traj.joint_trajectory)
+
         #traj = self.ik_planner.plan_to_joints(joint_sol_3)
         #for i in range(len(traj.joint_trajectory.points)):
         #    traj.joint_trajectory.points[i].velocities = [2.0]*6
         self._execute_joint_trajectory(traj.joint_trajectory)
         #self.get_logger().info("Toggling Gripper")
-        #self.timer = self.create_timer(0.3, self.execute_gripper_toggle)
+        self.timer = self.create_timer(0.6, self.execute_gripper_toggle)
 
 
     def set_speed(self, fraction):
@@ -447,7 +526,7 @@ class UR7e_CubeGrasp(Node):
             self.get_logger().error("Failed to set speed slider")
 
     def reset_speed(self):
-        self.set_speed(0.6)  # Reset to default speed (0.1 or your preferred default speed)
+        self.set_speed(0.3)  # Reset to default speed (0.1 or your preferred default speed)
         self.get_logger().info("Speed reset to default.")
 
     
