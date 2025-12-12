@@ -4,7 +4,7 @@ import tf2_geometry_msgs
 from sensor_msgs.msg import JointState
 import rclpy
 
-def quaternion_to_y_axis_xy(qx, qy, qz, qw):
+def quaternion_to_y_axis_xy(self, qx, qy, qz, qw):
     """
     Given a quaternion (x, y, z, w) for the EE in base_link,
     return the EE's local +Y axis expressed in base_link, projected to XY.
@@ -26,7 +26,7 @@ def quaternion_to_y_axis_xy(qx, qy, qz, qw):
     return v / n
 
 
-def rotate_xy(vec, angle):
+def rotate_xy(self, vec, angle):
     """Rotate a 2D vector by angle (radians) around the origin."""
     c = np.cos(angle)
     s = np.sin(angle)
@@ -34,7 +34,7 @@ def rotate_xy(vec, angle):
     return np.array([c*x - s*y, s*x + c*y], dtype=float)
 
 
-def line_distance_to_point(p_e, d, p_c):
+def line_distance_to_point(self, p_e, d, p_c):
     """
     Distance from point p_c to the ray starting at p_e and going along d.
     p_e, d, p_c are 2D numpy arrays.
@@ -48,7 +48,6 @@ def line_distance_to_point(p_e, d, p_c):
     perp = w - s * d
     return np.linalg.norm(perp)
 
-
 def align_base(self):
 
     if self.joint_state is None:
@@ -60,7 +59,7 @@ def align_base(self):
         return
 
     cup_pose_base = self.cup_pose
-    cp = cup_pose_base.pose.position
+    cp = cup_pose_base.point
     p_c_xy = np.array([cp.x, cp.y], dtype=float)
 
     try:
@@ -80,7 +79,7 @@ def align_base(self):
 
     p_e0_xy = np.array([ee_t.x, ee_t.y], dtype=float)
 
-    d0_xy = quaternion_to_y_axis_xy(
+    d0_xy = self.quaternion_to_y_axis_xy(
         ee_r.x, ee_r.y, ee_r.z, ee_r.w
     )
 
@@ -89,39 +88,46 @@ def align_base(self):
     theta0 = float(self.joint_state.position[base_idx])
     theta_cup = np.arctan2(p_c_xy[1], p_c_xy[0])
     theta_ee_forward = np.arctan2(d0_xy[1], d0_xy[0])
-
+    self.get_logger().info(f"theta0: {theta0}, theta_ee_forward: {theta_ee_forward}")
     delta_guess = theta_cup - theta_ee_forward
     theta_guess = theta0 + delta_guess
+    self.get_logger().info(f"theta_cup: {theta_cup}, theta_guess: {theta_guess}")
+
 
     window = np.pi / 2.0
     num_samples = 181
 
     best_theta = theta_guess
     best_err = float('inf')
+    best_i = None
 
     for i in range(num_samples):
-        alpha = -window * (i / (num_samples - 1))
-        # alpha = -window + (2.0 * window) * (i / (num_samples - 1)) - this is for two samples
+        # alpha = -window * (i / (num_samples - 1))
+        alpha = -window + (2.0 * window) * (i / (num_samples - 1)) 
         theta_candidate = theta_guess + alpha
         delta = theta_candidate - theta0
 
-        p_e_xy = rotate_xy(p_e0_xy, delta)
-        d_xy = rotate_xy(d0_xy, delta)
+        p_e_xy = self.rotate_xy(p_e0_xy, delta)
+        d_xy = self.rotate_xy(d0_xy, delta)
 
         n_d = np.linalg.norm(d_xy)
         if n_d < 1e-8:
             continue
         d_xy = d_xy / n_d
 
-        err = line_distance_to_point(p_e_xy, d_xy, p_c_xy)
+        err = self.line_distance_to_point(p_e_xy, d_xy, p_c_xy)
+        self.get_logger().info(f"guess #{i+1} error: {err}")
 
         if err < best_err:
             best_err = err
+            best_i = i
             best_theta = theta_candidate
+        
+        
 
     self.get_logger().info(
         f"align_base (brute): θ0={theta0:.3f}, θ_guess={theta_guess:.3f}, "
-        f"θ_best={best_theta:.3f}, min_err={best_err:.4f}"
+        f"θ_best={best_theta:.3f}, min_err={best_err:.4f}, best_iteration_#={best_i}"
     )
 
     target = JointState()
@@ -129,7 +135,7 @@ def align_base(self):
     target.name = list(self.joint_state.name)
     target.position = list(self.joint_state.position)
 
-    target.position[base_idx] = best_theta
+    target.position[base_idx] += best_theta
 
     traj = self.ik_planner.plan_to_joints(target)
     if traj is None:
