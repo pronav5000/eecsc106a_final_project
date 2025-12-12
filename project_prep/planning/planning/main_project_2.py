@@ -333,7 +333,12 @@ class UR7e_CubeGrasp(Node):
         target = JointState()
         target.header = self.joint_state.header
         target.name = list(self.joint_state.name)
-        target.position = [] # TODO: fill with pre shoot position
+        target.position = [-2.3977424106993617,
+                           -0.9090007543563843,
+                           0.179469936558564,
+                           1.5789344310764694,
+                           -3.14915115034921,
+                           self.joint_state.position[5]] # TODO: fill with pre shoot position
 
         traj = self.ik_planner.plan_to_joints(target)
         self._execute_joint_trajectory(traj.joint_trajectory)
@@ -345,8 +350,9 @@ class UR7e_CubeGrasp(Node):
         if self.joint_state is None:
             self.get_logger().error("No joint state available! Can't throw.")
             return
-        offset_shoulder_lift = 0
-        offset_elbow = 0
+        offset_shoulder_lift = -1.9057523212828578 - (-2.3977424106993617)
+        offset_elbow = -2.3659281730651855 - (-0.9090007543563843)
+        offset_wrist_2 = 1.5
 
         target = JointState()
         target.header = self.joint_state.header
