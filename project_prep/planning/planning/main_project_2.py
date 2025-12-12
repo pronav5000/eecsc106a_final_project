@@ -125,7 +125,7 @@ class UR7e_CubeGrasp(Node):
         self.get_logger().info(f"z: {self.cube_pose.point.z}")
 
         # offset_x, offset_y, offset_z = 0.018, -0.02, 0.25
-        offset_x, offset_y, offset_z = 0.018, -0.02, 0.25
+        offset_x, offset_y, offset_z = 0.018, -0.007, 0.21
 
         # 1) Move to ball
 
@@ -152,6 +152,7 @@ class UR7e_CubeGrasp(Node):
         self.job_queue.append(joint_sol_3)
         if joint_sol_3 is not None:
             self.get_logger().info("Joint solution 3 computed succesfully.")
+        self.job_queue.append('restore_state')
 
 
         # 5) Move to tucked Position
@@ -191,7 +192,7 @@ class UR7e_CubeGrasp(Node):
 
     #     traj = self.ik_planner.plan_to_joints(target)
     #     self._execute_joint_trajectory(traj.joint_trajectory)
-    def quaternion_to_y_axis_xy(qx, qy, qz, qw):
+    def quaternion_to_y_axis_xy(self, qx, qy, qz, qw):
         """
         Given a quaternion (x, y, z, w) for the EE in base_link,
         return the EE's local +Y axis expressed in base_link, projected to XY.
@@ -213,7 +214,7 @@ class UR7e_CubeGrasp(Node):
         return v / n
 
 
-    def rotate_xy(vec, angle):
+    def rotate_xy(self, vec, angle):
         """Rotate a 2D vector by angle (radians) around the origin."""
         c = np.cos(angle)
         s = np.sin(angle)
@@ -221,7 +222,7 @@ class UR7e_CubeGrasp(Node):
         return np.array([c*x - s*y, s*x + c*y], dtype=float)
 
 
-    def line_distance_to_point(p_e, d, p_c):
+    def line_distance_to_point(self, p_e, d, p_c):
         """
         Distance from point p_c to the ray starting at p_e and going along d.
         p_e, d, p_c are 2D numpy arrays.
@@ -246,7 +247,7 @@ class UR7e_CubeGrasp(Node):
             return
 
         cup_pose_base = self.cup_pose
-        cp = cup_pose_base.pose.position
+        cp = cup_pose_base.point
         p_c_xy = np.array([cp.x, cp.y], dtype=float)
 
         try:
@@ -286,8 +287,8 @@ class UR7e_CubeGrasp(Node):
         best_err = float('inf')
 
         for i in range(num_samples):
-            alpha = -window * (i / (num_samples - 1))
-            # alpha = -window + (2.0 * window) * (i / (num_samples - 1)) - this is for two samples
+            # alpha = -window * (i / (num_samples - 1))
+            alpha = -window + (2.0 * window) * (i / (num_samples - 1)) 
             theta_candidate = theta_guess + alpha
             delta = theta_candidate - theta0
 
@@ -315,7 +316,7 @@ class UR7e_CubeGrasp(Node):
         target.name = list(self.joint_state.name)
         target.position = list(self.joint_state.position)
 
-        target.position[base_idx] = best_theta
+        target.position[base_idx] += best_theta
 
         traj = self.ik_planner.plan_to_joints(target)
         if traj is None:
@@ -334,13 +335,13 @@ class UR7e_CubeGrasp(Node):
         target = JointState()
         target.header = self.joint_state.header
         target.name = list(self.joint_state.name)
-        target.position = [-2.3977424106993617,
-                           -0.9090007543563843,
-                           0.179469936558564,
-                           1.5789344310764694,
-                           -3.14915115034921,
+        target.position = [-1.816378732720846,
+                            -2.5843124389648438,
+                            1.256711645717285,
+                            1.5894787311553955,
+                            -3.13440972963442,
                            self.joint_state.position[5]] # TODO: fill with pre shoot position
-
+        target.velocity = [1.0]*6
         traj = self.ik_planner.plan_to_joints(target)
         self._execute_joint_trajectory(traj.joint_trajectory)
        
@@ -351,22 +352,17 @@ class UR7e_CubeGrasp(Node):
         if self.joint_state is None:
             self.get_logger().error("No joint state available! Can't throw.")
             return
-        offset_shoulder_lift = -1.9057523212828578 - (-2.3977424106993617)
-        offset_elbow = -2.3659281730651855 - (-0.9090007543563843)
-        offset_wrist_1 = 0.28631338477134705 - (0.179469936558564)
 
         target = JointState()
         target.header = self.joint_state.header
         target.name = list(self.joint_state.name)
         target.position = list(self.joint_state.position)
-        target.position[0] = target.position[0] + offset_shoulder_lift
-        target.position[1] = target.position[1] + offset_elbow
-        target.position[2] = target.position[2] + offset_wrist_1
-
-        target.velocity = [0.0]*6
-        target.velocity[0] = 15
-        target.velocity[1] = 15
-        target.velocity[2] = 15
+        target.position[0] = -2.585226675073141
+        target.position[1] = -0.794704258441925
+        target.position[2] = 0.27991358816113276
+        target.position[3] = 1.5894336700439453
+        target.position[4] = -3.13440972963442
+        target.position[5] = self.joint_state.position[5]
 
         traj = self.ik_planner.plan_to_joints(target)
         self._execute_joint_trajectory(traj.joint_trajectory)
@@ -462,7 +458,7 @@ class UR7e_CubeGrasp(Node):
         elif next_job == 'reset_speed':
             self.get_logger().info("Reset Speed")
             self.reset_speed()
-        elif isinstance(next_job, list) and next_job[0] == 'wind_up':
+        elif next_job == 'wind_up':
             self.get_logger().info("Winding")
             self.wind_up(next_job[1], next_job[2])
         else:
