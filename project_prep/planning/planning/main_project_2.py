@@ -157,6 +157,7 @@ class UR7e_CubeGrasp(Node):
 
         # 5) Move to tucked Position
         self.job_queue.append('wind_up')
+        self.job_queue.append('rotate_gripper')
 
         # 6) Move to align position
         self.job_queue.append('align_base')
@@ -167,7 +168,8 @@ class UR7e_CubeGrasp(Node):
         #     self.get_logger().info("Joint solution 4 computed succesfully.")        
         
         # 7) Move to shoot position
-        self.job_queue.append('thow_ball')
+        self.job_queue.append('throw_ball')
+        self.job_queue.append('reset_speed')
         self.execute_jobs()
    
     # def align_base(self):
@@ -315,7 +317,7 @@ class UR7e_CubeGrasp(Node):
         target.header = self.joint_state.header
         target.name = list(self.joint_state.name)
         target.position = list(self.joint_state.position)
-        target.position[base_idx] = 30 * np.pi / 180
+        target.position[base_idx] += 30 * np.pi / 180
 
         #target.position[base_idx] += best_theta
 
@@ -327,7 +329,7 @@ class UR7e_CubeGrasp(Node):
         self._execute_joint_trajectory(traj.joint_trajectory)
 
 
-    def wind_up(self, joint, angle):
+    def wind_up(self):
     
         if self.joint_state is None:
             self.get_logger().error("No joint state available! Can't throw.")
@@ -348,7 +350,7 @@ class UR7e_CubeGrasp(Node):
        
     def throw_ball(self):
 
-        self.set_speed(0.7)
+        self.set_speed(0.9)
 
         if self.joint_state is None:
             self.get_logger().error("No joint state available! Can't throw.")
@@ -362,13 +364,14 @@ class UR7e_CubeGrasp(Node):
         target.position[1] = -0.794704258441925
         target.position[2] = 0.27991358816113276
         target.position[3] = 1.5894336700439453
-        target.position[4] = -3.13440972963442
+        target.position[4] = self.joint_state.position[4]
         target.position[5] = self.joint_state.position[5]
+        target.velocity = [1.5]*6
 
         traj = self.ik_planner.plan_to_joints(target)
         self._execute_joint_trajectory(traj.joint_trajectory)
         self.get_logger().info("Toggling Gripper")
-        self.timer = self.create_timer(0.82, self.execute_gripper_toggle)
+        self.timer = self.create_timer(0.3, self.execute_gripper_toggle)
 
 
     def set_speed(self, fraction):
@@ -461,7 +464,7 @@ class UR7e_CubeGrasp(Node):
             self.reset_speed()
         elif next_job == 'wind_up':
             self.get_logger().info("Winding")
-            self.wind_up(next_job[1], next_job[2])
+            self.wind_up()
         else:
             self.get_logger().error("Unknown job type.")
             self.execute_jobs()  # Proceed to next job
@@ -558,6 +561,7 @@ def main(args=None):
     node = UR7e_CubeGrasp()
     rclpy.spin(node)
     node.destroy_node()
+    rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
