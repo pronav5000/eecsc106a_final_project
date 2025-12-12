@@ -45,7 +45,8 @@ class IKPlanner(Node):
     # TODO: Compute IK for a given (x, y, z) + quat and current robot joint state
     # -----------------------------------------------------------
     def compute_ik(self, current_joint_state, x, y, z,
-                   qx=0.0, qy=1.0, qz=0.0, qw=0.0, joint = 'wrist_3_link'): # Think about why the default quaternion is like this. Why is qy=1?
+                   qx=0.0, qy=1.0, qz=0.0, qw=0.0, joint = 'wrist_3_link', constraints=None): # Think about why the default quaternion is like this. Why is qy=1?
+        self.get_logger().info("Attempting IK")
         pose = PoseStamped()
         pose.header.frame_id = 'base_link'
         #pose.pose = ... # TODO: There are multiple parts/lines to fill here!
@@ -57,6 +58,7 @@ class IKPlanner(Node):
         pose.pose.orientation.z = qz
         pose.pose.orientation.w = qw
 
+    
 
         ik_req = GetPositionIK.Request()
         # TODO: Lookup the format for ik request and build ik_req by filling in necessary parameters. What is your end-effector link name?
@@ -67,6 +69,9 @@ class IKPlanner(Node):
         ik_req.ik_request.ik_link_name = joint
         ik_req.ik_request.timeout.sec = 10
         ik_req.ik_request.robot_state.joint_state = current_joint_state
+
+        if constraints != None:
+            ik_req.ik_request.constraints = constraints
         
 
         future = self.ik_client.call_async(ik_req)
@@ -92,6 +97,8 @@ class IKPlanner(Node):
         req.motion_plan_request.group_name = 'ur_manipulator'
         req.motion_plan_request.allowed_planning_time = 5.0 #TODO: fix delay
         req.motion_plan_request.planner_id = "RRTConnectkConfigDefault"
+        req.motion_plan_request.max_velocity_scaling_factor = 0.9
+        # req.motion_plan_request.max_acceleration_scaling_factor = 0.5
 
         goal_constraints = Constraints()
         for name, pos in zip(target_joint_state.name, target_joint_state.position):

@@ -132,8 +132,8 @@ def generate_launch_description():
         ball_node,
         cup_node,
         aruco_launch,
-        moveit_launch,
         ik_node,
+        moveit_launch,
         taskmaster_node,
         shutdown_on_exit
     ])

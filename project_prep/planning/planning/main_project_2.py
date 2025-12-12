@@ -5,7 +5,7 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from control_msgs.action import FollowJointTrajectory
 from geometry_msgs.msg import PointStamped 
-from moveit_msgs.msg import RobotTrajectory
+from moveit_msgs.msg import RobotTrajectory, JointConstraint, Constraints
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from sensor_msgs.msg import JointState
 from tf2_ros import Buffer, TransformListener
@@ -22,7 +22,6 @@ from planning.ik import IKPlanner
 class UR7e_CubeGrasp(Node):
     def __init__(self):
         super().__init__('cube_grasp')
-        
 
         self.cube_pub = self.create_subscription(PointStamped, '/ball_pos', self.cube_callback, 1) 
         self.cube_sub = self.create_subscription(PointStamped, '/cup_point', self.cup_callback, 1) 
@@ -38,6 +37,9 @@ class UR7e_CubeGrasp(Node):
         self.speed_slider_cli = self.create_client(
             SetSpeedSliderFraction, '/io_and_status_controller/set_speed_slider'
         )
+
+        #self.reset_speed()
+
 
         self.gripper_cli = self.create_client(Trigger, '/toggle_gripper')
 
@@ -109,6 +111,7 @@ class UR7e_CubeGrasp(Node):
         self.get_logger().info(f"Transformed ball position in base frame: X={transformed_position.x} Y={transformed_position.y} Z={transformed_position.z}")
 
         if self.cup_pose is None:
+            self.cube_pose = None
             self.get_logger().info("No cu[] position HELP")
             return
 
@@ -128,36 +131,38 @@ class UR7e_CubeGrasp(Node):
         offset_x, offset_y, offset_z = 0.018, -0.007, 0.21
 
         # 1) Move to ball
+        #self.set_speed(0.6)
 
-        joint_sol_1 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z)
-        self.job_queue.append(joint_sol_1)
-        if joint_sol_1 is not None:
-            self.get_logger().info("Joint solution 1 computed succesfully.")
+        # self.get_logger().info("Attempting IK #1")
+        # joint_sol_1 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z)
+        # #self.job_queue.append(joint_sol_1)
+        # if joint_sol_1 is not None:
+        #     self.get_logger().info("Joint solution 1 computed succesfully.")
 
         # 2) Move to Grasp Position (lower the gripper to the cube) (Do not change z offset lower than +0.16)
         '''
         Note that this will again be defined relative to the cube pose. 
         DO NOT CHANGE z offset lower than +0.16. 
         '''
-        joint_sol_2 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z -0.045)
-        self.job_queue.append(joint_sol_2)
-        if joint_sol_2 is not None:
-            self.get_logger().info("Joint solution 2 computed succesfully.")
+        # joint_sol_2 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z -0.045)
+        # #self.job_queue.append(joint_sol_2)
+        # if joint_sol_2 is not None:
+        #     self.get_logger().info("Joint solution 2 computed succesfully.")
 
         # 3) Close the gripper. See job_queue entries defined in init above for how to add this action.
-        self.job_queue.append('toggle_grip')
+        #self.job_queue.append('toggle_grip')
         
         # 4) Move back to Pre-Grasp Position
-        joint_sol_3 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z + 0.1)
-        self.job_queue.append(joint_sol_3)
-        if joint_sol_3 is not None:
-            self.get_logger().info("Joint solution 3 computed succesfully.")
-        self.job_queue.append('restore_state')
+        # joint_sol_3 = self.ik_planner.compute_ik(self.joint_state, self.cube_pose.point.x + offset_x, self.cube_pose.point.y + offset_y, self.cube_pose.point.z + offset_z + 0.1)
+        # #self.job_queue.append(joint_sol_3)
+        # if joint_sol_3 is not None:
+        #     self.get_logger().info("Joint solution 3 computed succesfully.")
+        # self.job_queue.append('restore_state')
 
 
         # 5) Move to tucked Position
         self.job_queue.append('wind_up')
-        self.job_queue.append('rotate_gripper')
+        #self.job_queue.append('rotate_gripper')
 
         # 6) Move to align position
         self.job_queue.append('align_base')
@@ -340,7 +345,7 @@ class UR7e_CubeGrasp(Node):
         target.name = list(self.joint_state.name)
         target.position = [-1.816378732720846,
                             -2.5843124389648438,
-                            1.256711645717285,
+                            1.256711645717285 - np.pi/2,
                             1.5894787311553955,
                             -3.13440972963442,
                            self.joint_state.position[5]] # TODO: fill with pre shoot position
@@ -355,6 +360,53 @@ class UR7e_CubeGrasp(Node):
         if self.joint_state is None:
             self.get_logger().error("No joint state available! Can't throw.")
             return
+        
+        # constraints = Constraints()
+        # jc = JointConstraint()
+        # jc.joint_name = 'wrist_1_joint'
+        # jc.position = self.joint_state.position[2]          # desired angle (rad)
+        # jc.tolerance_above = 0.1   
+        # jc.tolerance_below = 0.1
+        # jc.weight = 1.0             # importance of this constraint
+        # constraints.joint_constraints.append(jc)
+        
+
+        # jc = JointConstraint()
+        # jc.joint_name = 'wrist_2_joint'
+        # jc.position =  self.joint_state.position[3]           # desired angle (rad)
+        # jc.tolerance_above = 0.1   
+        # jc.tolerance_below = 0.1
+        # jc.weight = 1.0             # importance of this constraint
+        # constraints.joint_constraints.append(jc)
+
+        # jc = JointConstraint()
+        # jc.joint_name = 'wrist_3_joint'
+        # jc.position =  self.joint_state.position[4]           # desired angle (rad)
+        # jc.tolerance_above = 0.1   
+        # jc.tolerance_below = 0.1
+        # jc.weight = 1.0             # importance of this constraint
+
+
+
+        # constraints.joint_constraints.append(jc)
+
+        # jc = JointConstraint()
+        # jc.joint_name = 'shoulder_pan_joint'
+        # jc.position =  self.joint_state.position[5]           # desired angle (rad)
+        # jc.tolerance_above = 0.1   
+        # jc.tolerance_below = 0.1
+        # jc.weight = 1.0             # importance of this constraint
+
+
+
+        # constraints.joint_constraints.append(jc)
+        
+        # joint_sol_3 = self.ik_planner.compute_ik(self.joint_state, self.cup_pose.point.x + 0.6, self.cup_pose.point.y -0.7, self.cup_pose.point.z + 0.5, qx=1.0, qy=0.0, constraints=constraints)
+       
+        # if joint_sol_3 is not None:
+        #     self.get_logger().info("Joint solution 3 computed succesfully.")
+        
+
 
         target = JointState()
         target.header = self.joint_state.header
@@ -362,16 +414,19 @@ class UR7e_CubeGrasp(Node):
         target.position = list(self.joint_state.position)
         target.position[0] = -2.585226675073141
         target.position[1] = -0.794704258441925
-        target.position[2] = 0.27991358816113276
+        target.position[2] = 0.27991358816113276 - np.pi/2
         target.position[3] = 1.5894336700439453
         target.position[4] = self.joint_state.position[4]
         target.position[5] = self.joint_state.position[5]
-        target.velocity = [1.5]*6
+      
 
         traj = self.ik_planner.plan_to_joints(target)
+        #traj = self.ik_planner.plan_to_joints(joint_sol_3)
+        #for i in range(len(traj.joint_trajectory.points)):
+        #    traj.joint_trajectory.points[i].velocities = [2.0]*6
         self._execute_joint_trajectory(traj.joint_trajectory)
-        self.get_logger().info("Toggling Gripper")
-        self.timer = self.create_timer(0.3, self.execute_gripper_toggle)
+        #self.get_logger().info("Toggling Gripper")
+        #self.timer = self.create_timer(0.3, self.execute_gripper_toggle)
 
 
     def set_speed(self, fraction):
@@ -392,7 +447,7 @@ class UR7e_CubeGrasp(Node):
             self.get_logger().error("Failed to set speed slider")
 
     def reset_speed(self):
-        self.set_speed(0.15)  # Reset to default speed (0.1 or your preferred default speed)
+        self.set_speed(0.6)  # Reset to default speed (0.1 or your preferred default speed)
         self.get_logger().info("Speed reset to default.")
 
     
@@ -560,6 +615,7 @@ def main(args=None):
     rclpy.init(args=args)
     node = UR7e_CubeGrasp()
     rclpy.spin(node)
+    node.ik_planner.destroy_node()
     node.destroy_node()
     rclpy.shutdown()
 
