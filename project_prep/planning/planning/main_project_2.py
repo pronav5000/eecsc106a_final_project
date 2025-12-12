@@ -315,8 +315,9 @@ class UR7e_CubeGrasp(Node):
         target.header = self.joint_state.header
         target.name = list(self.joint_state.name)
         target.position = list(self.joint_state.position)
+        target.position[base_idx] = 30 * np.pi / 180
 
-        target.position[base_idx] += best_theta
+        #target.position[base_idx] += best_theta
 
         traj = self.ik_planner.plan_to_joints(target)
         if traj is None:
