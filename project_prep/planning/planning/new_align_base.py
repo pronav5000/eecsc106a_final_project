@@ -101,6 +101,7 @@ def align_base(self):
 
     for i in range(num_samples):
         alpha = -window * (i / (num_samples - 1))
+        # alpha = -window + (2.0 * window) * (i / (num_samples - 1)) - this is for two samples
         theta_candidate = theta_guess + alpha
         delta = theta_candidate - theta0
 
