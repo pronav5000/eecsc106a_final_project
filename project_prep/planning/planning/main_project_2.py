@@ -16,6 +16,9 @@ from tf2_ros import TransformException
 from ur_msgs.srv import SetSpeedSliderFraction
 import time
 
+#divya added
+from new_align_base import align_base
+
 
 from planning.ik import IKPlanner
 
@@ -244,94 +247,97 @@ class UR7e_CubeGrasp(Node):
         return np.linalg.norm(perp)
 
     def align_base(self):
+        return align_base(self)
+    #one we used for our demo
+    # def align_base(self):
 
-        if self.joint_state is None:
-            self.get_logger().error("No joint state available! Can't align base.")
-            return
+    #     if self.joint_state is None:
+    #         self.get_logger().error("No joint state available! Can't align base.")
+    #         return
 
-        if self.cup_pose is None:
-            self.get_logger().error("No cup pose available! Can't align base.")
-            return
+    #     if self.cup_pose is None:
+    #         self.get_logger().error("No cup pose available! Can't align base.")
+    #         return
 
-        cup_pose_base = self.cup_pose
-        cp = cup_pose_base.point
-        p_c_xy = np.array([cp.x, cp.y], dtype=float)
+    #     cup_pose_base = self.cup_pose
+    #     cp = cup_pose_base.point
+    #     p_c_xy = np.array([cp.x, cp.y], dtype=float)
 
-        try:
-            tf_ee = self.tf_buffer.lookup_transform(
-                'base_link',
-                'wrist_3_link',
-                rclpy.time.Time()
-            )
-        except TransformException as e:
-            self.get_logger().error(
-                f"TF error getting EE pose in base_link: {e}"
-            )
-            return
+    #     try:
+    #         tf_ee = self.tf_buffer.lookup_transform(
+    #             'base_link',
+    #             'wrist_3_link',
+    #             rclpy.time.Time()
+    #         )
+    #     except TransformException as e:
+    #         self.get_logger().error(
+    #             f"TF error getting EE pose in base_link: {e}"
+    #         )
+    #         return
 
-        ee_t = tf_ee.transform.translation
-        ee_r = tf_ee.transform.rotation
+    #     ee_t = tf_ee.transform.translation
+    #     ee_r = tf_ee.transform.rotation
 
-        p_e0_xy = np.array([ee_t.x, ee_t.y], dtype=float)
+    #     p_e0_xy = np.array([ee_t.x, ee_t.y], dtype=float)
 
-        d0_xy = self.quaternion_to_y_axis_xy(
-            ee_r.x, ee_r.y, ee_r.z, ee_r.w
-        )
+    #     d0_xy = self.quaternion_to_y_axis_xy(
+    #         ee_r.x, ee_r.y, ee_r.z, ee_r.w
+    #     )
 
-        base_idx = 5
+    #     base_idx = 5
 
-        theta0 = float(self.joint_state.position[base_idx])
-        theta_cup = np.arctan2(p_c_xy[1], p_c_xy[0])
-        theta_ee_forward = np.arctan2(d0_xy[1], d0_xy[0])
+    #     theta0 = float(self.joint_state.position[base_idx])
+    #     theta_cup = np.arctan2(p_c_xy[1], p_c_xy[0])
+    #     theta_ee_forward = np.arctan2(d0_xy[1], d0_xy[0])
 
-        delta_guess = theta_cup - theta_ee_forward
-        theta_guess = theta0 + delta_guess
+    #     delta_guess = theta_cup - theta_ee_forward
+    #     theta_guess = theta0 + delta_guess
 
-        window = np.pi / 2.0
-        num_samples = 181
+    #     window = np.pi / 2.0
+    #     num_samples = 181
 
-        best_theta = theta_guess
-        best_err = float('inf')
+    #     best_theta = theta_guess
+    #     best_err = float('inf')
 
-        for i in range(num_samples):
-            # alpha = -window * (i / (num_samples - 1))
-            alpha = -window + (2.0 * window) * (i / (num_samples - 1)) 
-            theta_candidate = theta_guess + alpha
-            delta = theta_candidate - theta0
+    #     for i in range(num_samples):
+    #         # alpha = -window * (i / (num_samples - 1))
+    #         alpha = -window + (2.0 * window) * (i / (num_samples - 1)) 
+    #         theta_candidate = theta_guess + alpha
+    #         delta = theta_candidate - theta0
 
-            p_e_xy = self.rotate_xy(p_e0_xy, delta)
-            d_xy = self.rotate_xy(d0_xy, delta)
+    #         p_e_xy = self.rotate_xy(p_e0_xy, delta)
+    #         d_xy = self.rotate_xy(d0_xy, delta)
 
-            n_d = np.linalg.norm(d_xy)
-            if n_d < 1e-8:
-                continue
-            d_xy = d_xy / n_d
+    #         n_d = np.linalg.norm(d_xy)
+    #         if n_d < 1e-8:
+    #             continue
+    #         d_xy = d_xy / n_d
 
-            err = self.line_distance_to_point(p_e_xy, d_xy, p_c_xy)
+    #         err = self.line_distance_to_point(p_e_xy, d_xy, p_c_xy)
 
-            if err < best_err:
-                best_err = err
-                best_theta = theta_candidate
+    #         if err < best_err:
+    #             best_err = err
+    #             best_theta = theta_candidate
 
-        self.get_logger().info(
-            f"align_base (brute): θ0={theta0:.3f}, θ_guess={theta_guess:.3f}, "
-            f"θ_best={best_theta:.3f}, min_err={best_err:.4f}"
-        )
+    #     self.get_logger().info(
+    #         f"align_base (brute): θ0={theta0:.3f}, θ_guess={theta_guess:.3f}, "
+    #         f"θ_best={best_theta:.3f}, min_err={best_err:.4f}"
+    #     )
 
-        target = JointState()
-        target.header = self.joint_state.header
-        target.name = list(self.joint_state.name)
-        target.position = list(self.joint_state.position)
-        target.position[base_idx] += 30.5 * np.pi / 180
+    #     target = JointState()
+    #     target.header = self.joint_state.header
+    #     target.name = list(self.joint_state.name)
+    #     target.position = list(self.joint_state.position)
+    #     target.position[base_idx] += 30.5 * np.pi / 180
 
-        #target.position[base_idx] += best_theta
+    #     #target.position[base_idx] += best_theta
 
-        traj = self.ik_planner.plan_to_joints(target)
-        if traj is None:
-            self.get_logger().error("Planning failed in align_base (brute).")
-            return
+    #     traj = self.ik_planner.plan_to_joints(target)
+    #     if traj is None:
+    #         self.get_logger().error("Planning failed in align_base (brute).")
+    #         return
 
-        self._execute_joint_trajectory(traj.joint_trajectory)
+    #     self._execute_joint_trajectory(traj.joint_trajectory)
 
 
     def wind_up(self):

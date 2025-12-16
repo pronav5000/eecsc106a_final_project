@@ -4,7 +4,7 @@ import tf2_geometry_msgs
 from sensor_msgs.msg import JointState
 import rclpy
 
-def quaternion_to_y_axis_xy(self, qx, qy, qz, qw):
+def quaternion_to_y_axis_xy(qx, qy, qz, qw):
     """
     Given a quaternion (x, y, z, w) for the EE in base_link,
     return the EE's local +Y axis expressed in base_link, projected to XY.
@@ -26,7 +26,7 @@ def quaternion_to_y_axis_xy(self, qx, qy, qz, qw):
     return v / n
 
 
-def rotate_xy(self, vec, angle):
+def rotate_xy(vec, angle):
     """Rotate a 2D vector by angle (radians) around the origin."""
     c = np.cos(angle)
     s = np.sin(angle)
@@ -34,7 +34,7 @@ def rotate_xy(self, vec, angle):
     return np.array([c*x - s*y, s*x + c*y], dtype=float)
 
 
-def line_distance_to_point(self, p_e, d, p_c):
+def line_distance_to_point(p_e, d, p_c):
     """
     Distance from point p_c to the ray starting at p_e and going along d.
     p_e, d, p_c are 2D numpy arrays.
@@ -79,7 +79,7 @@ def align_base(self):
 
     p_e0_xy = np.array([ee_t.x, ee_t.y], dtype=float)
 
-    d0_xy = self.quaternion_to_y_axis_xy(
+    d0_xy = quaternion_to_y_axis_xy(
         ee_r.x, ee_r.y, ee_r.z, ee_r.w
     )
 
@@ -107,15 +107,15 @@ def align_base(self):
         theta_candidate = theta_guess + alpha
         delta = theta_candidate - theta0
 
-        p_e_xy = self.rotate_xy(p_e0_xy, delta)
-        d_xy = self.rotate_xy(d0_xy, delta)
+        p_e_xy = rotate_xy(p_e0_xy, delta)
+        d_xy = rotate_xy(d0_xy, delta)
 
         n_d = np.linalg.norm(d_xy)
         if n_d < 1e-8:
             continue
         d_xy = d_xy / n_d
 
-        err = self.line_distance_to_point(p_e_xy, d_xy, p_c_xy)
+        err = line_distance_to_point(p_e_xy, d_xy, p_c_xy)
         self.get_logger().info(f"guess #{i+1} error: {err}")
 
         if err < best_err:
