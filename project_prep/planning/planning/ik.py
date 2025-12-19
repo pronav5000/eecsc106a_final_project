@@ -45,11 +45,10 @@ class IKPlanner(Node):
     # TODO: Compute IK for a given (x, y, z) + quat and current robot joint state
     # -----------------------------------------------------------
     def compute_ik(self, current_joint_state, x, y, z,
-                   qx=0.0, qy=1.0, qz=0.0, qw=0.0, joint = 'wrist_3_link', constraints=None): # Think about why the default quaternion is like this. Why is qy=1?
+                   qx=0.0, qy=1.0, qz=0.0, qw=0.0, joint = 'wrist_3_link', constraints=None):
         self.get_logger().info("Attempting IK")
         pose = PoseStamped()
         pose.header.frame_id = 'base_link'
-        #pose.pose = ... # TODO: There are multiple parts/lines to fill here!
         pose.pose.position.x = x
         pose.pose.position.y = y
         pose.pose.position.z = z
@@ -59,7 +58,7 @@ class IKPlanner(Node):
         pose.pose.orientation.w = qw
 
     
-
+        # Get position IK request
         ik_req = GetPositionIK.Request()
         # TODO: Lookup the format for ik request and build ik_req by filling in necessary parameters. What is your end-effector link name?
         ik_req.ik_request.avoid_collisions = True
@@ -70,10 +69,9 @@ class IKPlanner(Node):
         ik_req.ik_request.timeout.sec = 10
         ik_req.ik_request.robot_state.joint_state = current_joint_state
 
-        if constraints != None:
+        if constraints is not None:
             ik_req.ik_request.constraints = constraints
         
-
         future = self.ik_client.call_async(ik_req)
         rclpy.spin_until_future_complete(self, future)
 
@@ -92,14 +90,15 @@ class IKPlanner(Node):
     # -----------------------------------------------------------
     # Plan motion given a desired joint configuration
     # -----------------------------------------------------------
-    def plan_to_joints(self, target_joint_state):
+    def plan_to_joints(self, target_joint_state, start_joint_state=None):
         req = GetMotionPlan.Request()
         req.motion_plan_request.group_name = 'ur_manipulator'
-        req.motion_plan_request.allowed_planning_time = 5.0 #TODO: fix delay
+        req.motion_plan_request.allowed_planning_time = 5.0
         req.motion_plan_request.planner_id = "RRTConnectkConfigDefault"
-        req.motion_plan_request.max_velocity_scaling_factor = 0.9
-        # req.motion_plan_request.max_acceleration_scaling_factor = 0.5
 
+        if start_joint_state:
+            req.motion_plan_request.start_state.joint_state = start_joint_state
+            
         goal_constraints = Constraints()
         for name, pos in zip(target_joint_state.name, target_joint_state.position):
             goal_constraints.joint_constraints.append(
@@ -142,13 +141,6 @@ def main(args=None):
         'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
         'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'
     ]
-
-    # 4.722274303436279
-    # -1.8504554233946742
-    # -1.4257320165634155
-    # -1.4052301210216065
-    # 1.5935229063034058
-    # -3.14103871980776
 
     current_state.position = [4.722, -1.850, -1.425, -1.405, 1.593, -3.141]
 

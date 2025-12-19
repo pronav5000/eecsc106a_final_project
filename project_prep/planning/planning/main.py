@@ -19,7 +19,7 @@ class UR7e_CubeGrasp(Node):
     def __init__(self):
         super().__init__('cube_grasp')
 
-        self.cube_pub = self.create_subscription(PointStamped, '/ball_pos', self.cube_callback, 1) # TODO: CHECK IF TOPIC ALIGNS WITH YOURS
+        self.cube_pub = self.create_subscription(PointStamped, '/ball_pose', self.cube_callback, 1) # TODO: CHECK IF TOPIC ALIGNS WITH YOURS
         self.joint_state_sub = self.create_subscription(JointState, '/joint_states', self.joint_state_callback, 1)
 
         self.exec_ac = ActionClient(

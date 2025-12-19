@@ -22,13 +22,12 @@ class ConstantTransformPublisher(Node):
 
         # Create TransformStamped
         self.transform = TransformStamped()
-        # ---------------------------
-        # TODO: Fill out TransformStamped message
-        # --------------------------
         self.transform.header.frame_id = "ar_marker_10"
         self.transform.child_frame_id = "base_link"
+
         g_translation = G[:3, 3]
         g_rotation = G[:3, :3]
+        
         self.transform.transform.translation.x = g_translation[0]
         self.transform.transform.translation.y = g_translation[1]
         self.transform.transform.translation.z = g_translation[2]
@@ -38,8 +37,6 @@ class ConstantTransformPublisher(Node):
         self.transform.transform.rotation.y = quat[1]
         self.transform.transform.rotation.z = quat[2]
         self.transform.transform.rotation.w = quat[3]
-
-
 
         self.timer = self.create_timer(0.05, self.broadcast_tf)
 
