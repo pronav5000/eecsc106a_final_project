@@ -15,6 +15,7 @@ from tf2_geometry_msgs import do_transform_point
 from tf2_ros import TransformException
 from ur_msgs.srv import SetSpeedSliderFraction
 import time
+from scipy.optimize import brentq
 
 #divya added
 from new_align_base import align_base
@@ -107,8 +108,9 @@ class UR7e_Throw(Node):
         self.ball_point = self.transform_to_base_link(ball_point)
         if self.ball_point is None: return
 
+        b = self.ball_point.point
         self.get_logger().info(
-            f"Transformed ball position in base frame: X={self.ball_point.point.x} Y={self.ball_point.point.y} Z={self.ball_point.point.z}")
+            f"Transformed ball position in base frame: X={b.x} Y={b.y} Z={b.z}")
 
         # -----------------------------------------------------------------
         # checks if we have a self.cup_point
@@ -178,6 +180,7 @@ class UR7e_Throw(Node):
         target.header = self.joint_state.header
         target.name = list(self.joint_state.name)
 
+        # corresponds to a backrotation by ~30 degrees relative to vertical
         target.position = [-1.368044675593712,
                            0.23849994341005498,
                            -1.7610446415343226 + np.pi/2,
@@ -223,7 +226,7 @@ class UR7e_Throw(Node):
         i = target.name.index('shoulder_pan_joint')
         target.position[i] += dtheta
         
-        # plan trajectory to align base
+        # set up traj
         traj = self.ik_planner.plan_to_joints(target)
         assert traj
         
@@ -526,8 +529,72 @@ class UR7e_Throw(Node):
         self.set_speed(0.3)  # Reset to default speed (0.1 or your preferred default speed)
         self.get_logger().info("Speed reset to default.")
     
-    def release_time():
-        return
+    def release_time(self):
+        """
+        Calculates release time, given fixed self.v and distance d
+        """
+
+        if self.joint_state is None:
+            self.get_logger().error("No joint state available! Can't align base.")
+            return
+        
+        if self.cup_point is None:
+            self.get_logger().error("No cup position available! Can't align base.")
+            return
+
+        # ----------------------------------------------------
+        # Calculate distance d
+        # ----------------------------------------------------
+
+        # obtain arm length from base joint to shoulder joint
+        try:
+            g = self.tf_buffer.lookup_transform('shoulder_joint', 'base_link', rclpy.time.Time())
+        except TransformException as e:
+            self.get_logger().warn(f"Cannot lookup transform: {e}")
+            return
+        
+        c, t = self.cup_point.point, g.transform.translation
+        a = np.linalg.norm([t.x, t.y, t.z]) # arm length
+
+        d = np.sqrt(np.linalg.norm([c.x, c.y])**2 - a**2)
+
+        # ---------------------------------------------------
+        # Calculate tool height h
+        # ---------------------------------------------------
+        dx = - 0.25 # account for difference between AR marker and table
+        try:
+            h = self.tf_buffer.lookup_transform('tool0', 'base_link', rclpy.time.Time())
+        except TransformException as e:
+            self.get_logger().warn(f"Cannot lookup transform: {e}")
+            return
+        # took h(tool0<-base) @ point, then took negation to find z of point wrt tool0
+        h = - do_transform_point(self.cup_point, h).point.z + dx
+
+        # ---------------------------------------------------
+        # Calculate release angle (dtheta)
+        # ---------------------------------------------------
+
+        def first_bounce(theta):
+            e, mu, g = 0.75, 1.0, 9.81
+            vx, vz = self.v*np.cos(theta), self.v*np.sin(theta)
+            t0, t1 = (vz + np.sqrt(vz**2 + 2*g*h))/g, 2*e*np.sqrt(vz**2 + 2*g*h)/g - d
+            return vx*t0 + (mu*vx)*t1
+        
+        dtheta = brentq(first_bounce, xtol=1e-8, ytol=1e-8, maxiter=200)
+
+        # ---------------------------------------------------
+        # Calculate release time
+        # ---------------------------------------------------
+        t_align = 3.2 # base alignment time takes around 3 seconds
+        try:
+            trans = self.tf_buffer_lookup_transform('tool0', 'base_link', rclpy.time.Time()).transform.translation
+        except TransformException as e:
+            self.get_logger().warn(f"Cannot lookup transform: {e}")
+            return
+        l = np.linalg.norm([trans.x, trans.y, trans.z]) # arm length
+        dt = (np.pi/6 + dtheta) * l/self.v
+
+        return float(t_align + dt)
 
 def main(args=None):
     rclpy.init(args=args)
