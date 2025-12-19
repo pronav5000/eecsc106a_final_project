@@ -577,10 +577,11 @@ class UR7e_Throw(Node):
         def first_bounce(theta):
             e, mu, g = 0.75, 1.0, 9.81
             vx, vz = self.v*np.cos(theta), self.v*np.sin(theta)
-            t0, t1 = (vz + np.sqrt(vz**2 + 2*g*h))/g, 2*e*np.sqrt(vz**2 + 2*g*h)/g - d
+            t0, t1 = (vz + np.sqrt(vz**2 + 2*g*h))/g, 2*e*np.sqrt(vz**2 + 2*g*h)/g
             return vx*t0 + (mu*vx)*t1
         
-        dtheta = brentq(first_bounce, xtol=1e-8, ytol=1e-8, maxiter=200)
+        dtheta = brentq(lambda theta: first_bounce(theta) - d,
+                        xtol=1e-8, ytol=1e-8, maxiter=200)
 
         # ---------------------------------------------------
         # Calculate release time
